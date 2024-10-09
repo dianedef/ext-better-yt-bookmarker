@@ -115,14 +115,11 @@ const YouTubeBookmarker = (function() {
         const inputContainer = document.createElement('div');
         inputContainer.className = 'bookmark-input-container';
         inputContainer.style.position = 'absolute';
-        inputContainer.style.bottom = '60px';
-        inputContainer.style.left = '12px';
-        inputContainer.style.zIndex = '1000';
-        inputContainer.style.display = 'flex';
-        inputContainer.style.alignItems = 'center';
-        inputContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        inputContainer.style.padding = '10px';
-        inputContainer.style.borderRadius = '4px';
+        inputContainer.style.left = `${(currentTime / video.duration) * 100}%`;
+        inputContainer.style.bottom = '70px';
+        inputContainer.style.transform = 'translateX(-50%)';
+        inputContainer.style.zIndex = '2000';
+        // ... autres styles pour inputContainer ...
 
         const noteInput = document.createElement('input');
         noteInput.type = 'text';
@@ -131,11 +128,11 @@ const YouTubeBookmarker = (function() {
         noteInput.style.padding = '5px';
 
         const addButton = document.createElement('button');
-        addButton.textContent = 'Ajouter';
+        addButton.textContent = '+';
         addButton.style.marginRight = '5px';
 
         const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Annuler';
+        cancelButton.textContent = 'x';
 
         inputContainer.appendChild(noteInput);
         inputContainer.appendChild(addButton);
