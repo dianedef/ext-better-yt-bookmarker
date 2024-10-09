@@ -20,9 +20,9 @@ function addBookmarkButton() {
   if (player && !document.getElementById('bookmark-button')) {
     const button = document.createElement('button');
     button.id = 'bookmark-button';
-    button.textContent = 'Ajouter un marque-page';
+    button.textContent = 'Ajouter Marque-page';
     button.style.position = 'absolute';
-    button.style.bottom = '80px';
+    button.style.bottom = '60px';
     button.style.left = '40px';
     button.style.zIndex = '1000';
     player.appendChild(button);
@@ -108,45 +108,91 @@ async function addBookmark() {
 function addBookmarkIcon(bookmark) {
   const player = document.querySelector('.html5-video-player');
   if (player) {
+    const iconContainer = document.createElement('div');
+    iconContainer.className = 'custom-bookmark-icon-container';
+    iconContainer.style.position = 'absolute';
+    iconContainer.style.left = `${(bookmark.time / currentVideo.duration) * 100}%`;
+    iconContainer.style.bottom = '40px';
+    iconContainer.style.zIndex = '2000';
+    iconContainer.style.transform = 'translateX(-50%)';
+
     const icon = document.createElement('div');
     icon.className = 'custom-bookmark-icon';
-    icon.style.position = 'absolute';
-    icon.style.left = `${(bookmark.time / currentVideo.duration) * 100}%`;
-    icon.style.bottom = '40px';  // Ajuster cette valeur selon vos besoins
-    icon.style.width = '120px';
-    icon.style.height = '120px';
+    icon.style.width = '20px';
+    icon.style.height = '20px';
     icon.style.borderRadius = '50%';
     icon.style.backgroundColor = 'red';
-    icon.style.zIndex = '2000';
-    icon.style.transform = 'translateX(-50%)';
     icon.title = bookmark.note;
 
-    // Effet de survol
-    icon.style.transition = 'all 0.2s ease-in-out';
-    icon.addEventListener('mouseenter', () => {
-      icon.style.width = '160px';
-      icon.style.height = '160px';
-      icon.style.backgroundColor = 'orange';
-    });
-    icon.addEventListener('mouseleave', () => {
-      icon.style.width = '120px';
-      icon.style.height = '120px';
-      icon.style.backgroundColor = 'red';
+    const deleteIcon = document.createElement('div');
+    deleteIcon.className = 'custom-bookmark-delete-icon';
+    deleteIcon.innerHTML = '🗑️';
+    deleteIcon.style.position = 'absolute';
+    deleteIcon.style.top = '-15px';
+    deleteIcon.style.left = '50%';
+    deleteIcon.style.transform = 'translateX(-50%)';
+    deleteIcon.style.cursor = 'pointer';
+    deleteIcon.style.display = 'none';
+
+    deleteIcon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteBookmark(bookmark);
     });
 
-    player.appendChild(icon);
+    iconContainer.appendChild(icon);
+    iconContainer.appendChild(deleteIcon);
+    player.appendChild(iconContainer);
+
+    // Effet de survol
+    iconContainer.addEventListener('mouseenter', () => {
+      icon.style.width = '24px';
+      icon.style.height = '24px';
+      icon.style.backgroundColor = 'orange';
+      deleteIcon.style.display = 'block';
+    });
+    iconContainer.addEventListener('mouseleave', () => {
+      icon.style.width = '20px';
+      icon.style.height = '20px';
+      icon.style.backgroundColor = 'red';
+      deleteIcon.style.display = 'none';
+    });
 
     // Ajuster la position de l'icône lors du redimensionnement de la vidéo
     const resizeObserver = new ResizeObserver(() => {
       const progressBar = document.querySelector('.ytp-progress-bar');
       if (progressBar) {
-        icon.style.left = `${(bookmark.time / currentVideo.duration) * progressBar.offsetWidth}px`;
+        iconContainer.style.left = `${(bookmark.time / currentVideo.duration) * progressBar.offsetWidth}px`;
       }
     });
     resizeObserver.observe(player);
 
-    // Ajouter cette ligne pour déconnecter l'observateur lorsque l'icône est supprimée
-    icon.addEventListener('remove', () => resizeObserver.disconnect());
+    iconContainer.addEventListener('remove', () => resizeObserver.disconnect());
+  }
+}
+
+async function deleteBookmark(bookmark) {
+  if (!isExtensionValid()) {
+    console.error("Le contexte de l'extension n'est plus valide.");
+    alert("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.");
+    return;
+  }
+
+  try {
+    const response = await sendMessageToBackground({ 
+      action: 'deleteBookmark', 
+      time: bookmark.time,
+      url: bookmark.url
+    });
+    if (response && response.success) {
+      alert('Marque-page supprimé !');
+      loadBookmarks();
+    } else {
+      console.error('Erreur lors de la suppression du marque-page:', response);
+      alert('Erreur lors de la suppression du marque-page. Veuillez vérifier la console pour plus de détails.');
+    }
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi du message:', error);
+    alert('Erreur lors de la suppression du marque-page. L\'extension a peut-être été rechargée. Veuillez rafraîchir la page.');
   }
 }
 
