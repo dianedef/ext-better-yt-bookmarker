@@ -16,13 +16,18 @@ function setupHotkeys() {
           if (pressedHotkey === hotkey) {
             e.preventDefault();
             switch (action) {
-              case 'addBookmark':
+              case 'add-bookmark':
                 addBookmark();
                 break;
-              case 'togglePlayPause':
-                togglePlayPause();
+              case 'prev-bookmark':
+                navigateBookmarks('prev');
                 break;
-              // Ajoutez d'autres actions ici
+              case 'next-bookmark':
+                navigateBookmarks('next');
+                break;
+              case 'delete-bookmark':
+                deleteCurrentBookmark();
+                break;
             }
           }
         });
@@ -472,31 +477,34 @@ function addCustomStyles() {
   document.head.appendChild(style);
 }
 
+function navigateBookmarks(direction) {
+  chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+    if (!bookmarks || bookmarks.length === 0) return;
 
+    const currentTime = currentVideo.currentTime;
+    const currentUrl = window.location.href;
+    const videoBookmarks = bookmarks.filter(b => b.url === currentUrl);
 
+    if (direction === 'prev') {
+      const prevBookmark = videoBookmarks.reverse().find(b => b.time < currentTime);
+      if (prevBookmark) currentVideo.currentTime = prevBookmark.time;
+    } else if (direction === 'next') {
+      const nextBookmark = videoBookmarks.find(b => b.time > currentTime);
+      if (nextBookmark) currentVideo.currentTime = nextBookmark.time;
+    }
+  });
+}
 
+function deleteCurrentBookmark() {
+  chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+    if (!bookmarks || bookmarks.length === 0) return;
 
+    const currentTime = currentVideo.currentTime;
+    const currentUrl = window.location.href;
+    const updatedBookmarks = bookmarks.filter(b => !(b.url === currentUrl && Math.abs(b.time - currentTime) < 1));
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    chrome.storage.sync.set({ bookmarks: updatedBookmarks }, () => {
+      console.log('Marque-page supprimé');
+    });
+  });
+}
