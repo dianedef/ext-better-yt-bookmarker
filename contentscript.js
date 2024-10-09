@@ -16,21 +16,32 @@ function addBookmarkButton() {
     return;
   }
 
-  const player = document.querySelector('.html5-video-player');
-  if (player && !document.getElementById('bookmark-button')) {
+  const timeDisplay = document.querySelector('.ytp-time-display');
+  if (timeDisplay && !document.getElementById('bookmark-button')) {
     const button = document.createElement('button');
     button.id = 'bookmark-button';
-    button.textContent = 'Ajouter Marque-page';
-    button.style.position = 'absolute';
-    button.style.bottom = '60px';
-    button.style.left = '40px';
-    button.style.zIndex = '1000';
-    player.appendChild(button);
+    button.title = 'Ajouter un marque-page';
+
+    // Créer une icône SVG pour le bouton
+    const svgIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svgIcon.setAttribute("viewBox", "0 0 24 24");
+    svgIcon.setAttribute("width", "18");
+    svgIcon.setAttribute("height", "18");
+    svgIcon.innerHTML = '<path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z" fill="white"/>';
+
+    const buttonText = document.createElement('span');
+    buttonText.textContent = 'Ajouter un marque-page';
+
+    button.appendChild(svgIcon);
+    button.appendChild(buttonText);
+    
+    // Insérer le bouton après l'affichage du temps
+    timeDisplay.parentNode.insertBefore(button, timeDisplay.nextSibling);
 
     button.addEventListener('click', addBookmark);
-    console.log("Bouton de marque-page ajouté avec succès.");
+    console.log("Bouton de marque-page ajouté avec succès après l'affichage du temps.");
   } else {
-    console.warn("Impossible d'ajouter le bouton de marque-page. Lecteur non trouvé ou bouton déjà présent.");
+    console.warn("Impossible d'ajouter le bouton de marque-page. Affichage du temps non trouvé ou bouton déjà présent.");
   }
 }
 
@@ -68,11 +79,11 @@ async function addBookmark() {
     video.pause(); // Mettre la vidéo en pause
     const title = document.querySelector('.title')?.textContent || 'Titre inconnu';
     const url = window.location.href;
-    
+
     let thumbnail = '';
-    const thumbnailElement = document.querySelector('.ytp-thumbnail-image') || 
-                             document.querySelector('link[rel="image_src"]') ||
-                             document.querySelector('meta[property="og:image"]');
+    const thumbnailElement = document.querySelector('.ytp-thumbnail-image') ||
+      document.querySelector('link[rel="image_src"]') ||
+      document.querySelector('meta[property="og:image"]');
     if (thumbnailElement) {
       thumbnail = thumbnailElement.src || thumbnailElement.href || thumbnailElement.content;
     }
@@ -252,11 +263,11 @@ async function deleteBookmark(bookmark) {
   }
 
   const confirmDelete = confirm(`Voulez-vous vraiment supprimer ce marque-page : "${bookmark.note}" ?`);
-  
+
   if (confirmDelete) {
     try {
-      const response = await sendMessageToBackground({ 
-        action: 'deleteBookmark', 
+      const response = await sendMessageToBackground({
+        action: 'deleteBookmark',
         time: bookmark.time,
         url: bookmark.url
       });
@@ -312,12 +323,14 @@ function initializeVideo() {
     return;
   }
 
+  addCustomStyles(); // Ajout de cette ligne
+
   currentVideo = document.querySelector('video');
   if (currentVideo) {
     console.log("Vidéo trouvée, initialisation en cours...");
     addBookmarkButton();
     loadBookmarks();
-    
+
     currentVideo.addEventListener('play', handleVideoStateChange);
     currentVideo.addEventListener('pause', handleVideoStateChange);
   } else {
@@ -336,19 +349,19 @@ function checkExtensionState() {
 function reinitializeExtension() {
   console.log("Réinitialisation de l'extension...");
   isExtensionReady = false;
-  
+
   // Supprimer les anciens écouteurs d'événements
   if (currentVideo) {
     currentVideo.removeEventListener('play', handleVideoStateChange);
     currentVideo.removeEventListener('pause', handleVideoStateChange);
   }
-  
+
   // Supprimer l'ancien bouton de marque-page
   const oldButton = document.getElementById('bookmark-button');
   if (oldButton) {
     oldButton.remove();
   }
-  
+
   // Réinitialiser l'extension
   setTimeout(() => {
     initializeVideo();
@@ -357,7 +370,7 @@ function reinitializeExtension() {
 }
 
 // Écouteur pour les changements d'URL (navigation sur YouTube)
-let lastUrl = location.href; 
+let lastUrl = location.href;
 new MutationObserver(() => {
   const url = location.href;
   if (url !== lastUrl) {
@@ -366,7 +379,7 @@ new MutationObserver(() => {
       reinitializeExtension();
     }
   }
-}).observe(document, {subtree: true, childList: true});
+}).observe(document, { subtree: true, childList: true });
 
 // Initialisation au chargement de la page
 if (window.location.href.includes('youtube.com/watch')) {
@@ -392,4 +405,26 @@ function afficherMessage(message, type = 'info') {
   setTimeout(() => {
     messageContainer.remove();
   }, 3000);
+}
+
+function addCustomStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    #bookmark-button {
+      background: none !important;
+      border: none !important;
+      color: rgb(209, 207, 207) !important;
+      font-size: 15px !important;
+      font: Arial;
+      cursor: pointer !important;
+      display: flex !important;
+      align-items: center !important;
+      padding: 0 8px !important;
+      margin-left: 4px !important;
+    }
+    #bookmark-button svg {
+      margin-right: 5px !important;
+    }
+  `;
+  document.head.appendChild(style);
 }
