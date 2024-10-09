@@ -17,7 +17,7 @@ function addBookmarkButton() {
   }
 
   const timeDisplay = document.querySelector('.ytp-time-display');
-  if (timeDisplay && !document.getElementById('bookmark-button')) {
+  if (timeDisplay && !document.getElementById('bookmark-button')) { 
     const button = document.createElement('button');
     button.id = 'bookmark-button';
     button.title = 'Ajouter un marque-page';
@@ -72,6 +72,14 @@ async function addBookmark() {
     return;
   }
 
+  // Vérifier si l'input existe déjà
+  const existingInputContainer = document.querySelector('.bookmark-input-container');
+  if (existingInputContainer) {
+    // Si l'input existe, le supprimer et arrêter la fonction
+    existingInputContainer.remove();
+    return;
+  }
+
   const video = document.querySelector('video');
   if (video) {
     const currentTime = video.currentTime;
@@ -90,6 +98,7 @@ async function addBookmark() {
 
     // Créer le conteneur pour le champ de saisie
     const inputContainer = document.createElement('div');
+    inputContainer.className = 'bookmark-input-container';
     inputContainer.style.position = 'absolute';
     inputContainer.style.bottom = '60px';
     inputContainer.style.left = '12px';
@@ -137,6 +146,9 @@ async function addBookmark() {
       noteInput.removeEventListener('keydown', stopPropagation);
       addButton.removeEventListener('keydown', stopPropagation);
       cancelButton.removeEventListener('keydown', stopPropagation);
+      if (wasPlaying) {
+        video.play(); // Reprendre la lecture si la vidéo était en cours de lecture
+      }
     };
 
     const handleAddBookmark = async () => {
