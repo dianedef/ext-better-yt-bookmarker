@@ -115,11 +115,28 @@ const YouTubeBookmarker = (function() {
         const inputContainer = document.createElement('div');
         inputContainer.className = 'bookmark-input-container';
         inputContainer.style.position = 'absolute';
-        inputContainer.style.left = `${(currentTime / video.duration) * 100}%`;
         inputContainer.style.bottom = '70px';
-        inputContainer.style.transform = 'translateX(-50%)';
         inputContainer.style.zIndex = '2000';
         // ... autres styles pour inputContainer ...
+
+        // Calculer la position horizontale
+        const positionRatio = currentTime / video.duration;
+        let leftPosition = positionRatio * 100;
+
+        // Ajuster la position si elle est trop proche des bords
+        const containerWidth = 240; // Largeur estimée du conteneur en pixels
+        const playerWidth = state.player.offsetWidth;
+        const minPosition = (containerWidth / 2 / playerWidth) * 100;
+        const maxPosition = 100 - minPosition;
+
+        if (leftPosition < minPosition) {
+          leftPosition = minPosition;
+        } else if (leftPosition > maxPosition) {
+          leftPosition = maxPosition;
+        }
+
+        inputContainer.style.left = `${leftPosition}%`;
+        inputContainer.style.transform = 'translateX(-50%)';
 
         const noteInput = document.createElement('input');
         noteInput.type = 'text';
