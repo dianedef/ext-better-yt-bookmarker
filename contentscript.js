@@ -64,6 +64,8 @@ async function addBookmark() {
   const video = document.querySelector('video');
   if (video) {
     const currentTime = video.currentTime;
+    const wasPlaying = !video.paused;
+    video.pause(); // Mettre la vidéo en pause
     const title = document.querySelector('.title')?.textContent || 'Titre inconnu';
     const url = window.location.href;
     
@@ -130,6 +132,10 @@ async function addBookmark() {
       const note = noteInput.value;
       closeInput();
 
+      if (wasPlaying) {
+        video.play(); // Reprendre la lecture si la vidéo était en cours de lecture
+      }
+
       const bookmark = {
         time: currentTime,
         title: title,
@@ -160,7 +166,12 @@ async function addBookmark() {
       }
     });
 
-    cancelButton.addEventListener('click', closeInput);
+    cancelButton.addEventListener('click', () => {
+      closeInput();
+      if (wasPlaying) {
+        video.play(); // Reprendre la lecture si la vidéo était en cours de lecture
+      }
+    });
 
   } else {
     console.error('Élément vidéo non trouvé');
