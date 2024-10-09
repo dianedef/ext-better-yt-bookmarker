@@ -57,7 +57,7 @@ function sendMessageToBackground(message) {
 async function addBookmark() {
   if (!isExtensionValid()) {
     console.error("Le contexte de l'extension n'est plus valide.");
-    alert("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.");
+    afficherMessage("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.", 'error');
     return;
   }
 
@@ -67,7 +67,6 @@ async function addBookmark() {
     const title = document.querySelector('.title')?.textContent || 'Titre inconnu';
     const url = window.location.href;
     
-    // Essayons différentes méthodes pour obtenir la miniature
     let thumbnail = '';
     const thumbnailElement = document.querySelector('.ytp-thumbnail-image') || 
                              document.querySelector('link[rel="image_src"]') ||
@@ -76,32 +75,96 @@ async function addBookmark() {
       thumbnail = thumbnailElement.src || thumbnailElement.href || thumbnailElement.content;
     }
 
-    const bookmark = {
-      time: currentTime,
-      title: title,
-      url: url,
-      thumbnail: thumbnail,
-      note: prompt('Ajouter une note pour ce marque-page:')
+    // Créer le conteneur pour le champ de saisie
+    const inputContainer = document.createElement('div');
+    inputContainer.style.position = 'absolute';
+    inputContainer.style.bottom = '60px';
+    inputContainer.style.left = '12px';
+    inputContainer.style.zIndex = '1000';
+    inputContainer.style.display = 'flex';
+    inputContainer.style.alignItems = 'center';
+    inputContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    inputContainer.style.padding = '10px';
+    inputContainer.style.borderRadius = '4px';
+
+    const noteInput = document.createElement('input');
+    noteInput.type = 'text';
+    noteInput.placeholder = 'Ajouter une note pour ce marque-page';
+    noteInput.style.marginRight = '10px';
+    noteInput.style.padding = '5px';
+
+    const addButton = document.createElement('button');
+    addButton.textContent = 'Ajouter';
+    addButton.style.marginRight = '5px';
+
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Annuler';
+
+    inputContainer.appendChild(noteInput);
+    inputContainer.appendChild(addButton);
+    inputContainer.appendChild(cancelButton);
+
+    const playerContainer = document.querySelector('.html5-video-player');
+    playerContainer.appendChild(inputContainer);
+
+    noteInput.focus();
+
+    // Empêcher la propagation des événements clavier
+    const stopPropagation = (e) => {
+      e.stopPropagation();
     };
 
-    console.log('Tentative d\'ajout d\'un marque-page:', bookmark);
+    noteInput.addEventListener('keydown', stopPropagation);
+    addButton.addEventListener('keydown', stopPropagation);
+    cancelButton.addEventListener('keydown', stopPropagation);
 
-    try {
-      const response = await sendMessageToBackground({ action: 'addBookmark', bookmark });
-      if (response && response.success) {
-        alert('Marque-page ajouté !');
-        loadBookmarks();
-      } else {
-        console.error('Erreur lors de l\'ajout du marque-page:', response);
-        alert('Erreur lors de l\'ajout du marque-page. Veuillez vérifier la console pour plus de détails.');
+    // Fonction pour fermer le champ de saisie et supprimer les écouteurs d'événements
+    const closeInput = () => {
+      playerContainer.removeChild(inputContainer);
+      noteInput.removeEventListener('keydown', stopPropagation);
+      addButton.removeEventListener('keydown', stopPropagation);
+      cancelButton.removeEventListener('keydown', stopPropagation);
+    };
+
+    const handleAddBookmark = async () => {
+      const note = noteInput.value;
+      closeInput();
+
+      const bookmark = {
+        time: currentTime,
+        title: title,
+        url: url,
+        thumbnail: thumbnail,
+        note: note
+      };
+
+      try {
+        const response = await sendMessageToBackground({ action: 'addBookmark', bookmark });
+        if (response && response.success) {
+          afficherMessage('Marque-page ajouté !');
+          loadBookmarks();
+        } else {
+          console.error('Erreur lors de l\'ajout du marque-page:', response);
+          afficherMessage('Erreur lors de l\'ajout du marque-page. Veuillez vérifier la console pour plus de détails.', 'error');
+        }
+      } catch (error) {
+        console.error('Erreur lors de l\'envoi du message:', error);
+        afficherMessage('Erreur lors de l\'ajout du marque-page. L\'extension a peut-être été rechargée. Veuillez rafraîchir la page.', 'error');
       }
-    } catch (error) {
-      console.error('Erreur lors de l\'envoi du message:', error);
-      alert('Erreur lors de l\'ajout du marque-page. L\'extension a peut-être été rechargée. Veuillez rafraîchir la page.');
-    }
+    };
+
+    addButton.addEventListener('click', handleAddBookmark);
+    noteInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        handleAddBookmark();
+      }
+    });
+
+    cancelButton.addEventListener('click', closeInput);
+
   } else {
     console.error('Élément vidéo non trouvé');
-    alert('Erreur : élément vidéo non trouvé');
+    afficherMessage('Erreur : élément vidéo non trouvé', 'error');
   }
 }
 
@@ -173,26 +236,30 @@ function addBookmarkIcon(bookmark) {
 async function deleteBookmark(bookmark) {
   if (!isExtensionValid()) {
     console.error("Le contexte de l'extension n'est plus valide.");
-    alert("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.");
+    afficherMessage("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.", 'error');
     return;
   }
 
-  try {
-    const response = await sendMessageToBackground({ 
-      action: 'deleteBookmark', 
-      time: bookmark.time,
-      url: bookmark.url
-    });
-    if (response && response.success) {
-      alert('Marque-page supprimé !');
-      loadBookmarks();
-    } else {
-      console.error('Erreur lors de la suppression du marque-page:', response);
-      alert('Erreur lors de la suppression du marque-page. Veuillez vérifier la console pour plus de détails.');
+  const confirmDelete = confirm(`Voulez-vous vraiment supprimer ce marque-page : "${bookmark.note}" ?`);
+  
+  if (confirmDelete) {
+    try {
+      const response = await sendMessageToBackground({ 
+        action: 'deleteBookmark', 
+        time: bookmark.time,
+        url: bookmark.url
+      });
+      if (response && response.success) {
+        afficherMessage('Marque-page supprimé !');
+        loadBookmarks();
+      } else {
+        console.error('Erreur lors de la suppression du marque-page:', response);
+        afficherMessage('Erreur lors de la suppression du marque-page. Veuillez vérifier la console pour plus de détails.', 'error');
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'envoi du message:', error);
+      afficherMessage('Erreur lors de la suppression du marque-page. L\'extension a peut-être été rechargée. Veuillez rafraîchir la page.', 'error');
     }
-  } catch (error) {
-    console.error('Erreur lors de l\'envoi du message:', error);
-    alert('Erreur lors de la suppression du marque-page. L\'extension a peut-être été rechargée. Veuillez rafraîchir la page.');
   }
 }
 
@@ -293,4 +360,25 @@ new MutationObserver(() => {
 // Initialisation au chargement de la page
 if (window.location.href.includes('youtube.com/watch')) {
   initializeVideo();
+}
+
+function afficherMessage(message, type = 'info') {
+  const messageContainer = document.createElement('div');
+  messageContainer.className = `youtube-bookmarker-message ${type}`;
+  messageContainer.textContent = message;
+  messageContainer.style.position = 'fixed';
+  messageContainer.style.top = '10px';
+  messageContainer.style.right = '10px';
+  messageContainer.style.padding = '10px';
+  messageContainer.style.borderRadius = '5px';
+  messageContainer.style.zIndex = '9999';
+  messageContainer.style.backgroundColor = type === 'error' ? '#ffcccc' : '#ccffcc';
+  messageContainer.style.color = '#333';
+  messageContainer.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+
+  document.body.appendChild(messageContainer);
+
+  setTimeout(() => {
+    messageContainer.remove();
+  }, 3000);
 }
