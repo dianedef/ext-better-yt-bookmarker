@@ -17,6 +17,7 @@ const YouTubeBookmarker = (function() {
     bookmarkButton: null
   };
 
+
   // Fonctions utilitaires
   const utils = {
     isExtensionValid: function() {
@@ -164,6 +165,7 @@ const YouTubeBookmarker = (function() {
             video.play(); // Reprendre la lecture si la vidéo était en cours de lecture
           }
         };
+
 
         const handleAddBookmark = async () => {
           const note = noteInput.value;
@@ -338,25 +340,49 @@ const YouTubeBookmarker = (function() {
         icon.style.height = '20px';
         icon.style.borderRadius = '50%';
         icon.style.backgroundColor = 'red';
-        icon.title = bookmark.note;
+        icon.style.cursor = 'pointer';
 
-        const deleteIcon = document.createElement('div');
+        const infoContainer = document.createElement('div');
+        infoContainer.className = 'custom-bookmark-info-container';
+        infoContainer.style.position = 'absolute';
+        infoContainer.style.bottom = '25px';
+        infoContainer.style.left = '50%';
+        infoContainer.style.transform = 'translateX(-50%)';
+        infoContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        infoContainer.style.backdropFilter = 'blur(5px)';
+        infoContainer.style.color = 'white';
+        infoContainer.style.padding = '8px';
+        infoContainer.style.borderRadius = '4px';
+        infoContainer.style.border = '2px solid #ff0000';
+        infoContainer.style.display = 'none';
+        infoContainer.style.zIndex = '2001';
+        infoContainer.style.whiteSpace = 'nowrap';
+
+        const noteText = document.createElement('span');
+        noteText.className = 'custom-bookmark-note';
+        noteText.textContent = bookmark.note;
+        noteText.style.fontSize = '14px';
+        noteText.style.marginRight = '10px';
+
+        const deleteIcon = document.createElement('span');
         deleteIcon.className = 'custom-bookmark-delete-icon';
         deleteIcon.innerHTML = '🗑️';
-        deleteIcon.style.position = 'absolute';
-        deleteIcon.style.top = '-15px';
-        deleteIcon.style.left = '50%';
-        deleteIcon.style.transform = 'translateX(-50%)';
         deleteIcon.style.cursor = 'pointer';
-        deleteIcon.style.display = 'none';
+
+        infoContainer.appendChild(noteText);
+        infoContainer.appendChild(deleteIcon);
 
         deleteIcon.addEventListener('click', (e) => {
           e.stopPropagation();
           bookmarkManager.deleteBookmark(bookmark);
         });
 
+        icon.addEventListener('click', () => {
+          state.currentVideo.currentTime = bookmark.time;
+        });
+
         iconContainer.appendChild(icon);
-        iconContainer.appendChild(deleteIcon);
+        iconContainer.appendChild(infoContainer);
         player.appendChild(iconContainer);
 
         // Effet de survol
@@ -364,13 +390,13 @@ const YouTubeBookmarker = (function() {
           icon.style.width = '24px';
           icon.style.height = '24px';
           icon.style.backgroundColor = 'orange';
-          deleteIcon.style.display = 'block';
+          infoContainer.style.display = 'block';
         });
         iconContainer.addEventListener('mouseleave', () => {
           icon.style.width = '20px';
           icon.style.height = '20px';
           icon.style.backgroundColor = 'red';
-          deleteIcon.style.display = 'none';
+          infoContainer.style.display = 'none';
         });
 
         // Ajuster la position de l'icône lors du redimensionnement de la vidéo
@@ -409,6 +435,14 @@ const YouTubeBookmarker = (function() {
         }
       `;
       document.head.appendChild(style);
+    },
+
+    toggleNotesVisibility: function() {
+      const infoContainers = document.querySelectorAll('.custom-bookmark-info-container');
+      const isVisible = infoContainers[0]?.style.display !== 'none';
+      infoContainers.forEach(container => {
+        container.style.display = isVisible ? 'none' : 'block';
+      });
     }
   };
 
@@ -464,6 +498,9 @@ const YouTubeBookmarker = (function() {
                   break;
                 case 'delete-bookmark':
                   deleteCurrentBookmark();
+                  break;
+                case 'toggle-notes':
+                  uiManager.toggleNotesVisibility();
                   break;
               }
             }
