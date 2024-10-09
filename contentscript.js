@@ -1,6 +1,36 @@
 let currentVideo = null;
 let isExtensionReady = true;
 
+function setupHotkeys() {
+  chrome.storage.sync.get('hotkeys', ({ hotkeys }) => {
+    if (hotkeys) {
+      document.addEventListener('keydown', (e) => {
+        const pressedHotkey = [
+          e.ctrlKey ? 'Ctrl' : '',
+          e.altKey ? 'Alt' : '',
+          e.shiftKey ? 'Shift' : '',
+          e.key.toUpperCase()
+        ].filter(Boolean).join('+');
+
+        Object.entries(hotkeys).forEach(([action, hotkey]) => {
+          if (pressedHotkey === hotkey) {
+            e.preventDefault();
+            switch (action) {
+              case 'addBookmark':
+                addBookmark();
+                break;
+              case 'togglePlayPause':
+                togglePlayPause();
+                break;
+              // Ajoutez d'autres actions ici
+            }
+          }
+        });
+      });
+    }
+  });
+}
+                
 function isExtensionValid() {
   try {
     return !!chrome.runtime && !!chrome.runtime.id;
@@ -74,6 +104,7 @@ async function addBookmark() {
 
   // Vérifier si l'input existe déjà
   const existingInputContainer = document.querySelector('.bookmark-input-container');
+  
   if (existingInputContainer) {
     // Si l'input existe, le supprimer et arrêter la fonction
     existingInputContainer.remove();
@@ -335,7 +366,9 @@ function initializeVideo() {
     return;
   }
 
-  addCustomStyles(); // Ajout de cette ligne
+
+  addCustomStyles();
+  setupHotkeys();
 
   currentVideo = document.querySelector('video');
   if (currentVideo) {
@@ -438,3 +471,32 @@ function addCustomStyles() {
   `;
   document.head.appendChild(style);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

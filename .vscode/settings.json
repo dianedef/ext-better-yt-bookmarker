@@ -1,3 +1,4 @@
 {
-   "livePreview.defaultPreviewPath": "/options.html"
+   "livePreview.defaultPreviewPath": "/options.html",
+   "workbench.editor.wrapTabs": false
 }

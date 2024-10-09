@@ -11,16 +11,48 @@ document.addEventListener('DOMContentLoaded', () => {
      }
    });
  
-   // Enregistrer les nouveaux raccourcis
-   hotkeyForm.addEventListener('submit', (e) => {
-     e.preventDefault();
-     const formData = new FormData(hotkeyForm);
-     const hotkeys = Object.fromEntries(formData);
-     chrome.storage.sync.set({ hotkeys }, () => {
-       alert('Raccourcis enregistrés !');
+   // Ajouter des écouteurs d'événements pour les champs de raccourcis
+   const hotkeyInputs = document.querySelectorAll('input[type="text"]');
+   hotkeyInputs.forEach(input => {
+     input.addEventListener('keydown', (e) => {
+       e.preventDefault();
+       const key = e.key.toUpperCase();
+       const modifiers = [];
+       if (e.ctrlKey) modifiers.push('Ctrl');
+       if (e.altKey) modifiers.push('Alt');
+       if (e.shiftKey) modifiers.push('Shift');
+       const hotkey = [...modifiers, key].join('+');
+       input.value = hotkey;
+
+       // Enregistrer automatiquement le raccourci
+       const hotkeys = {};
+       hotkeyInputs.forEach(input => {
+         hotkeys[input.id] = input.value;
+       });
+       chrome.storage.sync.set({ hotkeys }, () => {
+         afficherNotification('Raccourci enregistré !');
+       });
      });
    });
- 
+
+   function afficherNotification(message) {
+     const notification = document.createElement('div');
+     notification.textContent = message;
+     notification.style.position = 'fixed';
+     notification.style.top = '10px';
+     notification.style.right = '10px';
+     notification.style.padding = '10px';
+     notification.style.backgroundColor = '#4CAF50';
+     notification.style.color = 'white';
+     notification.style.borderRadius = '5px';
+     notification.style.zIndex = '1000';
+     document.body.appendChild(notification);
+
+     setTimeout(() => {
+       notification.remove();
+     }, 3000);
+   }
+
    // Exporter les marque-pages
    exportButton.addEventListener('click', () => {
      chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
