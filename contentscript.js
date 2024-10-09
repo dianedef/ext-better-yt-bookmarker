@@ -426,13 +426,11 @@ function addCustomStyles() {
       background: none !important;
       border: none !important;
       color: rgb(209, 207, 207) !important;
-      font-size: 15px !important;
-      font: Arial;
+      font-size: 13px !important;
+      font: Century Gothic;
       cursor: pointer !important;
       display: flex !important;
       align-items: center !important;
-      padding: 0 8px !important;
-      margin-left: 4px !important;
     }
     #bookmark-button svg {
       margin-right: 5px !important;
