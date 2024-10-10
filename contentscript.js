@@ -16,7 +16,10 @@ const YouTubeBookmarker = (function () {
     player: null,
     bookmarkButton: null,
     timeDisplay: null,
-    progressBar: null
+    progressBar: null,
+    bookmarkInputVisible: false,
+    bookmarkInputContainer: null,
+    bookmarkInputElement: null
   };
 
 
@@ -89,7 +92,6 @@ const YouTubeBookmarker = (function () {
           bookmark: bookmark
         });
         if (response && response.success) {
-          utils.afficherMessage(`Marque-page ${action === 'addBookmark' ? 'ajouté' : 'supprimé'} !`);
           this.loadBookmarks();
         } else {
           console.error(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page:`, response);
@@ -101,8 +103,21 @@ const YouTubeBookmarker = (function () {
       }
     },
 
+    handleAddBookmark: async function() {
+      if (state.bookmarkInputVisible && state.bookmarkInputContainer) {
+        const note = state.bookmarkInputElement ? state.bookmarkInputElement.value : '';
+        await this.saveBookmark(note);
+      } else {
+        await this.addBookmark();
+      }
+    },
+
     addBookmark: async function () {
       console.log("addBookmark appelé");
+
+      const { showBookmarkButtons } = await new Promise(resolve => 
+        chrome.storage.sync.get({ showBookmarkButtons: false }, resolve)
+      );
 
       if (!state.currentVideo) {
         console.error("Erreur : Aucune vidéo en cours de lecture.");
@@ -110,12 +125,14 @@ const YouTubeBookmarker = (function () {
         return;
       }
 
-      const currentTime = state.currentVideo.currentTime;
       const wasPlaying = !state.currentVideo.paused;
       state.currentVideo.pause();
 
+      const inputContainer = document.createElement('div');
+      inputContainer.className = CONSTANTS.BOOKMARK_INPUT_CONTAINER_CLASS;
+      
       // Calculer la position horizontale
-      const positionRatio = currentTime / state.currentVideo.duration;
+      const positionRatio = state.currentVideo.currentTime / state.currentVideo.duration;
       let leftPosition = positionRatio * 100;
 
       // Ajuster la position si elle est trop proche des bords
@@ -130,10 +147,6 @@ const YouTubeBookmarker = (function () {
         leftPosition = maxPosition;
       }
 
-      console.log("Création de la modale de saisie");
-
-      const inputContainer = document.createElement('div');
-      inputContainer.className = 'bookmark-input-container';
       inputContainer.style.left = `${leftPosition}%`;
 
       const noteInput = document.createElement('input');
@@ -141,19 +154,25 @@ const YouTubeBookmarker = (function () {
       noteInput.className = 'bookmark-input';
       noteInput.placeholder = 'Ajouter une note pour ce marque-page';
 
-      const addButton = document.createElement('button');
-      addButton.textContent = '+';
-      addButton.style.marginRight = '5px';
+      inputContainer.appendChild(noteInput);
 
-      const cancelButton = document.createElement('button');
-      cancelButton.textContent = 'x';
+      if (showBookmarkButtons) {
+        const addButton = document.createElement('button');
+        addButton.textContent = '+';
+        addButton.style.marginRight = '5px';
 
-      inputContainer.append(noteInput, addButton, cancelButton);
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'x';
+
+        inputContainer.append(addButton, cancelButton);
+
+        addButton.addEventListener('click', () => this.saveBookmark(noteInput.value));
+        cancelButton.addEventListener('click', () => this.closeBookmarkInput());
+      }
 
       const closeInput = () => {
-        inputContainer.remove();
+        this.closeBookmarkInput();
         document.removeEventListener('click', handleOutsideClick);
-        if (wasPlaying) state.currentVideo.play();
       };
 
       const handleOutsideClick = (e) => {
@@ -162,48 +181,60 @@ const YouTubeBookmarker = (function () {
         }
       };
 
-      const handleAddBookmark = async () => {
-        const note = noteInput.value;
-        const currentTime = state.currentVideo ? state.currentVideo.currentTime : 0;
-        const url = window.location.href;
-        const bookmark = {
-          time: currentTime,
-          url: url,
-          note: note
-        };
-        closeInput();
-        console.log("Logique d'ajout de marque-page exécutée");
-        
-        if (wasPlaying && state.currentVideo) {
-          state.currentVideo.play();
-        }
-
-        await this.handleBookmarkAction('addBookmark', bookmark);
-      };
-
       noteInput.addEventListener('keydown', e => {
         e.stopPropagation();
         if (e.key === 'Escape') closeInput();
-        if (e.key === 'Enter') handleAddBookmark();
+        if (e.key === 'Enter') this.saveBookmark(noteInput.value);
       });
 
-      addButton.addEventListener('click', handleAddBookmark);
-      cancelButton.addEventListener('click', closeInput);
-
-      // Empêcher la propagation du clic à l'intérieur de la modale
       inputContainer.addEventListener('click', (e) => {
         e.stopPropagation();
       });
 
       document.addEventListener('click', handleOutsideClick);
 
-      if (!state.player) {
+      if (state.player) {
+        state.player.appendChild(inputContainer);
+        state.bookmarkInputContainer = inputContainer;
+        state.bookmarkInputElement = noteInput;
+        state.bookmarkInputVisible = true;
+        noteInput.focus();
+      } else {
         console.error("Conteneur du lecteur non trouvé");
-        return;
       }
-      state.player.appendChild(inputContainer);
-      console.log("Modale ajoutée au DOM");
-      noteInput.focus();
+
+      // Stockons l'état de lecture dans l'objet state
+      state.wasPlayingBeforeBookmark = wasPlaying;
+    },
+
+    saveBookmark: async function(note) {
+      const currentTime = state.currentVideo ? state.currentVideo.currentTime : 0;
+      const url = window.location.href;
+      const bookmark = {
+        time: currentTime,
+        url: url,
+        note: note
+      };
+      
+      this.closeBookmarkInput();
+      await this.handleBookmarkAction('addBookmark', bookmark);
+    },
+
+    closeBookmarkInput: function() {
+      if (state.bookmarkInputContainer) {
+        state.bookmarkInputContainer.remove();
+        state.bookmarkInputContainer = null;
+        state.bookmarkInputElement = null;
+      }
+      state.bookmarkInputVisible = false;
+      
+      // Vérifier si la vidéo était en lecture avant l'ouverture de l'input
+      if (state.currentVideo && state.wasPlayingBeforeBookmark) {
+        state.currentVideo.play();
+      }
+      
+      // Réinitialiser l'état de lecture
+      state.wasPlayingBeforeBookmark = undefined;
     },
 
     addDefaultBookmarks: function() {
@@ -232,10 +263,27 @@ const YouTubeBookmarker = (function () {
     },
 
     deleteBookmark: async function (bookmark) {
-      const confirmDelete = confirm(`Voulez-vous vraiment supprimer ce marque-page : "${bookmark.note}" ?`);
+      if (!utils.isExtensionValid()) {
+        console.error("Le contexte de l'extension n'est plus valide.");
+        utils.afficherMessage("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.", 'error');
+        return;
+      }
 
-      if (confirmDelete) {
-        await this.handleBookmarkAction('deleteBookmark', bookmark);
+      try {
+        const response = await utils.sendMessageToBackground({
+          action: 'deleteBookmark',
+          bookmark: bookmark
+        });
+        if (response && response.success) {
+          utils.afficherMessage("Marque-page supprimé !");
+          this.loadBookmarks();
+        } else {
+          console.error("Erreur lors de la suppression du marque-page:", response);
+          utils.afficherMessage("Erreur lors de la suppression du marque-page. Veuillez vérifier la console pour plus de détails.", 'error');
+        }
+      } catch (error) {
+        console.error('Erreur lors de l\'envoi du message:', error);
+        utils.afficherMessage("Une erreur est survenue lors de la suppression du marque-page.", 'error');
       }
     },
 
@@ -329,21 +377,13 @@ const YouTubeBookmarker = (function () {
         button.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          console.log("Bouton de marque-page cliqué - avant addBookmark");
+          console.log("Bouton de marque-page cliqué");
           
           try {
-            if (typeof bookmarkManager === 'undefined' || typeof bookmarkManager.addBookmark !== 'function') {
-              console.error("bookmarkManager ou sa méthode addBookmark n'est pas définie correctement");
-              return;
-            }
-            
-            bookmarkManager.addBookmark();
-            console.log("Fonction addBookmark appelée avec succès");
+            bookmarkManager.handleAddBookmark();
           } catch (error) {
-            console.error("Erreur lors de l'appel à addBookmark:", error);
+            console.error("Erreur lors de l'ajout du marque-page:", error);
           }
-          
-          console.log("Après l'appel à addBookmark");
         });
         console.log("Bouton de marque-page ajouté avec succès après l'affichage du temps.");
       } else {

@@ -1,1 +1,57 @@
 ajouter une barre de progression supplémentaire pour voir ou on en est a tout instant
+
+Dans le popup, nous allons avoir une liste des vidéos avec leurs notes
+
+
+Ligne numéro 1 : le logo de l'extension à gauche, une barre de recherche à droite
+
+Ligne numéro 2 - Première vidéo avec des bookmarks :
+
+      - le thumbnail de la vidéo apparaît en sur la gauche (cliquable, redirige vers la vidéo dans le même onglet pour un clic simple, dans un onglet en arrière plan pour un clic de molette, dans un onglet en avant plan pour un clic droit)
+      A droite du thumbnail, deux lignes:
+         - le titre de la vidéo apparaît (cliquable, redirige vers la vidéo dans le même onglet pour un clic simple, dans un onglet en arrière plan pour un clic de molette, dans un onglet en avant plan pour un clic droit)
+         - une ligne avec des boutons : Bookmarks (pour ouvrir, fermer la liste des notes liées à la vidéo) et Delete (pour supprimer toutes les notes liées à la vidéo et la vidéo en elle même du popup)
+
+   Quand on clique sur le toggle pour ouvrir les notes on a un tableau :         
+      - à gauche le timestamp cliquable qui permet de venir directement sur la vidéo à l'endroit du bookmark avec le même mécanisme de clic que le titre de la vidéo (clic gauche ouvre dans l'onglet, clic droit ouvre dans un nouvel onglet en avant plan, clic de molette ouvre dans un nouvel onglet en arrière plan)
+      - à droite la note pour chaque timestamp
+      - à droite un bouton "x" pour supprimer la note
+
+
+Refaire la même chose pour chaque vidéo.        
+   Ligne numéro 4 :
+   
+Sur la dernière ligne en bas (sticky, même quand il y a une longue liste de vidéos), un bouton pour exporter les notes en Markdown, 5 étoile avec un lien vers la page d'extension au milieu et un bouton pour ouvrir les paramètres de l'extension.
+
+
+
+ajouter une fonctionnalité d'export des notes, en Markdown, selon ce format:
+
+## Titre de la vidéo numéro1
+[titre de l'url](url)
+
+[timestamp][url du timestamp] : note numéro1
+[timestamp][url du timestamp] : note numéro2
+[timestamp][url du timestamp] : note numéro3
+[timestamp][url du timestamp] : note numéroN
+
+## Titre de la vidéo numéro2
+[titre de l'url](url)
+
+[timestamp][url du timestamp] : note numéro1
+[timestamp][url du timestamp] : note numéro2
+[timestamp][url du timestamp] : note numéro3
+[timestamp][url du timestamp] : note numéroN
+
+## Titre de la vidéo numéroN
+[titre de l'url](url)
+
+[timestamp][url du timestamp] : note numéro1
+[timestamp][url du timestamp] : note numéro2
+[timestamp][url du timestamp] : note numéro3
+[timestamp][url du timestamp] : note numéroN
+
+
+les défaults bookmark marchent pas
+- bouton supprimer pour chaque vidéo (supprime toutes les notes de la vidéo) et chaque note.
+supprimer une note ne supprime pas l'icone de bookmark
