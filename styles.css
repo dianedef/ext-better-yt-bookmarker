@@ -1,0 +1,108 @@
+/* Styles pour le bouton de signet */
+#bookmark-button {
+   background: none !important;
+   border: none !important;
+   color: rgb(209, 207, 207) !important;
+   font-size: 13px !important;
+   font-family: Century Gothic, sans-serif;
+   cursor: pointer !important;
+   display: flex !important;
+   align-items: center !important;
+}
+
+#bookmark-button svg {
+   margin-right: 5px !important;
+}
+
+/* Styles pour le conteneur d'icône de signet */
+.custom-bookmark-icon-container {
+   position: absolute;
+   bottom: 40px;
+   z-index: 2000;
+   transform: translateX(-50%);
+}
+
+/* Styles pour l'icône de signet personnalisée */
+.custom-bookmark-icon {
+   width: 20px;
+   height: 20px;
+   border-radius: 50%;
+   background-color: red;
+   cursor: pointer;
+   transition: all 0.3s ease;
+}
+
+.custom-bookmark-icon:hover {
+   width: 24px;
+   height: 24px;
+   background-color: orange;
+}
+
+/* Styles pour le conteneur d'informations du signet */
+.custom-bookmark-info-container {
+   position: absolute;
+   bottom: 25px;
+   left: 50%;
+   transform: translateX(-50%);
+   background-color: rgba(0, 0, 0, 0.7);
+   backdrop-filter: blur(5px);
+   color: white;
+   padding: 8px 8px 8px 8px; /* Augmentation du padding droit */
+   border-radius: 4px;
+   border: 2px solid #ff0000;
+   display: none;
+}
+
+.custom-bookmark-note {
+   font-size: 14px;
+   margin-right: 10px;
+}
+
+.custom-bookmark-delete-icon {
+   position: absolute;
+   top: 50%;
+   right: 5px;
+   transform: translateY(-50%);
+   cursor: pointer;
+   transition: transform 0.2s ease; 
+   font-size: 18px; 
+}
+
+.custom-bookmark-delete-icon:hover {
+   transform: translateY(-50%) scale(1.2); /* Zoom de 20% au survol */
+}
+
+/* Styles pour les messages d'erreur et d'information */
+.youtube-bookmarker-message {
+   position: fixed;
+   top: 10px;
+   right: 10px;
+   padding: 10px;
+   border-radius: 5px;
+   z-index: 9999;
+   color: #333;
+   box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.youtube-bookmarker-message.info {
+   background-color: #ccffcc;
+}
+
+.youtube-bookmarker-message.error {
+   background-color: #ffcccc;
+   border: 1px solid #ff0000;
+}
+
+/* Pour addBookmark */
+.bookmark-input-container {
+   position: absolute;
+   bottom: 70px;
+   z-index: 2000;
+   transform: translateX(-50%);
+}
+
+/* Styles pour le conteneur d'entrée de signet */
+.bookmark-input {
+   margin-right: 10px;
+   padding: 5px;
+}

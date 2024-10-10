@@ -21,12 +21,9 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://www.youtube.com/*"
-      ],
-      "js": [
-        "contentScript.js"
-      ]
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["contentScript.js"],
+      "css": ["styles.css"]
     }
   ],
   "options_page": "options.html"

@@ -10,11 +10,13 @@ const YouTubeBookmarker = (function () {
   };
 
   // État de l'application
-  let state = {
+  const state = {
     currentVideo: null,
     isExtensionReady: true,
     player: null,
-    bookmarkButton: null
+    bookmarkButton: null,
+    timeDisplay: null,
+    progressBar: null
   };
 
 
@@ -30,11 +32,14 @@ const YouTubeBookmarker = (function () {
     },
 
     updateState: function () {
-      console.log("Mise à jour de l'état"); // Aj
+      console.log("Mise à jour de l'état");
       state.player = document.querySelector('.html5-video-player');
       state.bookmarkButton = document.getElementById(CONSTANTS.BOOKMARK_BUTTON_ID);
       state.currentVideo = document.querySelector('video');
-      console.log("État mis à jour :", state); // 
+      // Mise à jour des nouvelles références DOM
+      state.timeDisplay = document.querySelector('.ytp-time-display');
+      state.progressBar = state.player ? state.player.querySelector('.ytp-progress-bar') : null;
+      console.log("État mis à jour :", state);
     },
 
     sendMessageToBackground: function (message) {
@@ -61,16 +66,6 @@ const YouTubeBookmarker = (function () {
       const messageContainer = document.createElement('div');
       messageContainer.className = `youtube-bookmarker-message ${type}`;
       messageContainer.textContent = message;
-      messageContainer.style.position = 'fixed';
-      messageContainer.style.top = '10px';
-      messageContainer.style.right = '10px';
-      messageContainer.style.padding = '10px';
-      messageContainer.style.borderRadius = '5px';
-      messageContainer.style.zIndex = '9999';
-      messageContainer.style.backgroundColor = type === 'error' ? '#ffcccc' : '#ccffcc';
-      messageContainer.style.color = '#333';
-      messageContainer.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-
       document.body.appendChild(messageContainer);
 
       setTimeout(() => {
@@ -81,6 +76,31 @@ const YouTubeBookmarker = (function () {
 
   // Gestion des marque-pages
   const bookmarkManager = {
+    handleBookmarkAction: async function(action, bookmark) {
+      if (!utils.isExtensionValid()) {
+        console.error("Le contexte de l'extension n'est plus valide.");
+        utils.afficherMessage("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.", 'error');
+        return;
+      }
+
+      try {
+        const response = await utils.sendMessageToBackground({
+          action: action,
+          bookmark: bookmark
+        });
+        if (response && response.success) {
+          utils.afficherMessage(`Marque-page ${action === 'addBookmark' ? 'ajouté' : 'supprimé'} !`);
+          this.loadBookmarks();
+        } else {
+          console.error(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page:`, response);
+          utils.afficherMessage(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page. Veuillez vérifier la console pour plus de détails.`, 'error');
+        }
+      } catch (error) {
+        console.error('Erreur lors de l\'envoi du message:', error);
+        utils.afficherMessage(`Une erreur est survenue lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page.`, 'error');
+      }
+    },
+
     addBookmark: async function () {
       console.log("addBookmark appelé");
 
@@ -93,14 +113,6 @@ const YouTubeBookmarker = (function () {
       const currentTime = state.currentVideo.currentTime;
       const wasPlaying = !state.currentVideo.paused;
       state.currentVideo.pause();
-
-      console.log("Création de la modale de saisie"); // Ajoutez ce log
-
-      const inputContainer = document.createElement('div');
-      inputContainer.className = 'bookmark-input-container';
-      inputContainer.style.position = 'absolute';
-      inputContainer.style.bottom = '70px';
-      inputContainer.style.zIndex = '2000';
 
       // Calculer la position horizontale
       const positionRatio = currentTime / state.currentVideo.duration;
@@ -118,14 +130,16 @@ const YouTubeBookmarker = (function () {
         leftPosition = maxPosition;
       }
 
+      console.log("Création de la modale de saisie");
+
+      const inputContainer = document.createElement('div');
+      inputContainer.className = 'bookmark-input-container';
       inputContainer.style.left = `${leftPosition}%`;
-      inputContainer.style.transform = 'translateX(-50%)';
 
       const noteInput = document.createElement('input');
       noteInput.type = 'text';
+      noteInput.className = 'bookmark-input';
       noteInput.placeholder = 'Ajouter une note pour ce marque-page';
-      noteInput.style.marginRight = '10px';
-      noteInput.style.padding = '5px';
 
       const addButton = document.createElement('button');
       addButton.textContent = '+';
@@ -159,27 +173,12 @@ const YouTubeBookmarker = (function () {
         };
         closeInput();
         console.log("Logique d'ajout de marque-page exécutée");
-        try {
-
-          if (wasPlaying && state.currentVideo) {
-            state.currentVideo.play(); // Reprendre la lecture si la vidéo était en cours de lecture
-          }
-
-          const response = await utils.sendMessageToBackground({
-            action: 'addBookmark',
-            bookmark: bookmark
-          });
-          if (response && response.success) {
-            utils.afficherMessage('Marque-page ajouté !');
-            bookmarkManager.loadBookmarks();
-          } else {
-            console.error('Erreur lors de l\'ajout du marque-page:', response);
-            utils.afficherMessage('Erreur lors de l\'ajout du marque-page. Veuillez vérifier la console pour plus de détails.', 'error');
-          }
-        } catch (error) {
-          console.error('Erreur lors de l\'envoi du message:', error);
-          utils.afficherMessage('Une erreur est survenue lors de l\'ajout du marque-page.', 'error');
+        
+        if (wasPlaying && state.currentVideo) {
+          state.currentVideo.play();
         }
+
+        await this.handleBookmarkAction('addBookmark', bookmark);
       };
 
       noteInput.addEventListener('keydown', e => {
@@ -198,43 +197,45 @@ const YouTubeBookmarker = (function () {
 
       document.addEventListener('click', handleOutsideClick);
 
-      const playerContainer = document.querySelector('.html5-video-player');
-      if (!playerContainer) {
+      if (!state.player) {
         console.error("Conteneur du lecteur non trouvé");
         return;
       }
-      playerContainer.appendChild(inputContainer);
+      state.player.appendChild(inputContainer);
       console.log("Modale ajoutée au DOM");
       noteInput.focus();
     },
 
-    deleteBookmark: async function (bookmark) {
-      if (!utils.isExtensionValid()) {
-        console.error("Le contexte de l'extension n'est plus valide.");
-        utils.afficherMessage("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.", 'error');
-        return;
-      }
+    addDefaultBookmarks: function() {
+      if (state.currentVideo) {
+        const url = window.location.href;
 
+        const startBookmark = {
+          time: 0,
+          note: 'Début de la vidéo',
+          url: url
+        };
+
+        const endBookmark = {
+          time: state.currentVideo.duration,
+          note: 'Fin de la vidéo',
+          url: url
+        };
+
+        // Ici, vous pouvez ajouter la logique pour sauvegarder ces marque-pages par défaut
+        // Par exemple :
+        // this.addBookmark(startBookmark);
+        // this.addBookmark(endBookmark);
+      } else {
+        console.warn("Impossible d'ajouter les marque-pages par défaut : aucune vidéo trouvée.");
+      }
+    },
+
+    deleteBookmark: async function (bookmark) {
       const confirmDelete = confirm(`Voulez-vous vraiment supprimer ce marque-page : "${bookmark.note}" ?`);
 
       if (confirmDelete) {
-        try {
-          const response = await utils.sendMessageToBackground({
-            action: 'deleteBookmark',
-            time: bookmark.time,
-            url: bookmark.url
-          });
-          if (response && response.success) {
-            utils.afficherMessage('Marque-page supprimé !');
-            bookmarkManager.loadBookmarks();
-          } else {
-            console.error('Erreur lors de la suppression du marque-page:', response);
-            utils.afficherMessage('Erreur lors de la suppression du marque-page. Veuillez vérifier la console pour plus de détails.', 'error');
-          }
-        } catch (error) {
-          console.error('Erreur lors de l\'envoi du message:', error);
-          utils.afficherMessage('Erreur lors de la suppression du marque-page. L\'extension a peut-être été rechargée. Veuillez rafraîchir la page.', 'error');
-        }
+        await this.handleBookmarkAction('deleteBookmark', bookmark);
       }
     },
 
@@ -251,7 +252,7 @@ const YouTubeBookmarker = (function () {
         }
         if (bookmarks && Array.isArray(bookmarks)) {
           const videoBookmarks = bookmarks.filter(b => b.url === window.location.href);
-          uiManager.removeExistingBookmarkIcons(); // Remettre cette ligne ici
+          uiManager.removeExistingBookmarkIcons();
           videoBookmarks.forEach(uiManager.addBookmarkIcon);
         }
       });
@@ -273,8 +274,26 @@ const YouTubeBookmarker = (function () {
           if (nextBookmark) state.currentVideo.currentTime = nextBookmark.time;
         }
       });
-    }
-  };
+    },
+
+    deleteCurrentBookmark: function() {
+      chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+        if (!bookmarks || bookmarks.length === 0) return;
+  
+        const currentTime = state.currentVideo.currentTime;
+        const currentUrl = window.location.href;
+        const bookmarkToDelete = bookmarks.find(b => 
+          b.url === currentUrl && Math.abs(b.time - currentTime) <= 5
+        );
+  
+        if (bookmarkToDelete) {
+          this.deleteBookmark(bookmarkToDelete);
+        } else {
+          utils.afficherMessage('Aucun marque-page à supprimer à proximité.', 'info');
+        }
+      });
+    },
+  }
 
   // Gestion de l'interface utilisateur
   const uiManager = {
@@ -284,11 +303,10 @@ const YouTubeBookmarker = (function () {
         return;
       }
       
-      const timeDisplay = document.querySelector('.ytp-time-display');
-      if (timeDisplay && !document.getElementById('bookmark-button')) {
-        console.log("Ajout du bouton de marque-page"); // Ajoutez ce log
+      if (state.timeDisplay && !state.bookmarkButton) {
+        console.log("Ajout du bouton de marque-page");
         const button = document.createElement('button');
-        button.id = 'bookmark-button';
+        button.id = CONSTANTS.BOOKMARK_BUTTON_ID;
         button.title = 'Ajouter un marque-page';
         
         // Créer une icône SVG pour le bouton
@@ -304,8 +322,9 @@ const YouTubeBookmarker = (function () {
         button.appendChild(svgIcon);
         button.appendChild(buttonText);
         
-        // Insérer le bouton après l'affichage du temps
-        timeDisplay.parentNode.insertBefore(button, timeDisplay.nextSibling);
+        // Utilisation de state.timeDisplay au lieu de document.querySelector
+        state.timeDisplay.parentNode.insertBefore(button, state.timeDisplay.nextSibling);
+        state.bookmarkButton = button;
         
         button.addEventListener('click', (e) => {
           e.preventDefault();
@@ -331,96 +350,91 @@ const YouTubeBookmarker = (function () {
         console.warn("Impossible d'ajouter le bouton de marque-page. Affichage du temps non trouvé ou bouton déjà présent.");
       }
       
-      
-      console.log("wesh"); // Ajoutez ce log
     },
     
     addBookmarkIcon: function (bookmark) {
-      const player = document.querySelector('.html5-video-player');
-      if (player) {
+      console.log("Début de addBookmarkIcon pour le marque-page :", bookmark);
+      
+      if (state.player && state.progressBar) {
+        console.log("state.player trouvé :", state.player);
+        
         const iconContainer = document.createElement('div');
         iconContainer.className = 'custom-bookmark-icon-container';
         iconContainer.style.position = 'absolute';
-        iconContainer.style.left = `${(bookmark.time / state.currentVideo.duration) * 100}%`;
-        iconContainer.style.bottom = '40px';
-        iconContainer.style.zIndex = '2000';
-        iconContainer.style.transform = 'translateX(-50%)';
+        // Utilisation de state.progressBar au lieu de querySelector
+        iconContainer.style.left = `${(bookmark.time / state.currentVideo.duration) * state.progressBar.offsetWidth}px`;
+        console.log("Container d'icônes créé avec la position :", iconContainer.style.left);
 
         const icon = document.createElement('div');
         icon.className = 'custom-bookmark-icon';
-        icon.style.width = '20px';
-        icon.style.height = '20px';
-        icon.style.borderRadius = '50%';
-        icon.style.backgroundColor = 'red';
-        icon.style.cursor = 'pointer';
+        console.log("Icône point rouge créée");
 
         const infoContainer = document.createElement('div');
         infoContainer.className = 'custom-bookmark-info-container';
-        infoContainer.style.position = 'absolute';
-        infoContainer.style.bottom = '25px';
-        infoContainer.style.left = '50%';
-        infoContainer.style.transform = 'translateX(-50%)';
-        infoContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-        infoContainer.style.backdropFilter = 'blur(5px)';
-        infoContainer.style.color = 'white';
-        infoContainer.style.padding = '8px';
-        infoContainer.style.borderRadius = '4px';
-        infoContainer.style.border = '2px solid #ff0000';
-        infoContainer.style.display = 'none';
-        infoContainer.style.zIndex = '2001';
-        infoContainer.style.whiteSpace = 'nowrap';
-
+        console.log("Container d'info créé");
+        
         const noteText = document.createElement('span');
         noteText.className = 'custom-bookmark-note';
         noteText.textContent = bookmark.note;
-        noteText.style.fontSize = '14px';
-        noteText.style.marginRight = '10px';
+        console.log("Texte de note créé avec le contenu :", bookmark.note);
 
         const deleteIcon = document.createElement('span');
         deleteIcon.className = 'custom-bookmark-delete-icon';
         deleteIcon.innerHTML = '🗑️';
-        deleteIcon.style.cursor = 'pointer';
+        console.log("Icône de suppression créée");
 
         infoContainer.appendChild(noteText);
         infoContainer.appendChild(deleteIcon);
 
         deleteIcon.addEventListener('click', (e) => {
+          console.log("Clic sur l'icône de suppression");
           e.stopPropagation();
           bookmarkManager.deleteBookmark(bookmark);
         });
 
         icon.addEventListener('click', () => {
+          console.log("Clic sur l'icône de marque-page, navigation vers :", bookmark.time);
           state.currentVideo.currentTime = bookmark.time;
         });
 
         iconContainer.appendChild(icon);
         iconContainer.appendChild(infoContainer);
-        player.appendChild(iconContainer);
+        state.player.appendChild(iconContainer);
+        
+        console.log("Tous les éléments ont été ajoutés au DOM");
 
         // Effet de survol
-        iconContainer.addEventListener('mouseenter', () => {
-          icon.style.width = '24px';
-          icon.style.height = '24px';
-          icon.style.backgroundColor = 'orange';
+        icon.addEventListener('mouseenter', () => {
+          console.log("Survol de l'icône");
           infoContainer.style.display = 'block';
         });
-        iconContainer.addEventListener('mouseleave', () => {
-          icon.style.width = '20px';
-          icon.style.height = '20px';
-          icon.style.backgroundColor = 'red';
+
+        infoContainer.addEventListener('mouseenter', () => {
+          console.log("Survol du conteneur d'info");
+          infoContainer.style.display = 'block';
+        });
+
+        infoContainer.addEventListener('mouseleave', () => {
+          console.log("Fin du survol du conteneur d'info");
           infoContainer.style.display = 'none';
         });
 
         // Ajuster la position de l'icône lors du redimensionnement de la vidéo
         const resizeObserver = new ResizeObserver(() => {
-          const progressBar = document.querySelector('.ytp-progress-bar');
-          if (progressBar) {
-            iconContainer.style.left = `${(bookmark.time / state.currentVideo.duration) * progressBar.offsetWidth}px`;
+          console.log("Redimensionnement détecté");
+          if (state.progressBar) {
+            iconContainer.style.left = `${(bookmark.time / state.currentVideo.duration) * state.progressBar.offsetWidth}px`;
+            console.log("Nouvelle position de l'icône :", iconContainer.style.left);
           }
         });
-        resizeObserver.observe(player);
+        resizeObserver.observe(state.player);
 
-        iconContainer.addEventListener('remove', () => resizeObserver.disconnect());
+        iconContainer.addEventListener('remove', () => {
+          console.log("Icône supprimée, déconnexion de l'observateur");
+          resizeObserver.disconnect();
+        });
+      } else {
+        console.error("Le lecteur vidéo au moment de l'ajout des icônes de notes n'est pas disponible dans l'état actuel.");
       }
     },
 
@@ -428,23 +442,11 @@ const YouTubeBookmarker = (function () {
       const existingIcons = document.querySelectorAll('.custom-bookmark-icon');
       existingIcons.forEach(icon => icon.remove());
     },
-
-    addCustomStyles: function () {
+    
+    addDynamicStyles: function () {
       const style = document.createElement('style');
       style.textContent = `
-        #bookmark-button {
-          background: none !important;
-          border: none !important;
-          color: rgb(209, 207, 207) !important;
-          font-size: 13px !important;
-          font: Century Gothic;
-          cursor: pointer !important;
-          display: flex !important;
-          align-items: center !important;
-        }
-        #bookmark-button svg {
-          margin-right: 5px !important;
-        }
+        /* Ajoutez ici uniquement les styles qui doivent être calculés dynamiquement */
       `;
       document.head.appendChild(style);
     },
@@ -467,12 +469,13 @@ const YouTubeBookmarker = (function () {
     }
 
     utils.updateState();
-    uiManager.addCustomStyles();
+    uiManager.addDynamicStyles();
     setupHotkeys();
 
     if (state.currentVideo) {
       console.log("Vidéo trouvée, initialisation en cours...");
       uiManager.addBookmarkButton();
+      bookmarkManager.addDefaultBookmarks();
       bookmarkManager.loadBookmarks();
 
       state.currentVideo.addEventListener('play', handleVideoStateChange);
@@ -547,6 +550,7 @@ new MutationObserver(() => {
   if (url !== lastUrl) {
     lastUrl = url;
     if (url.includes('youtube.com/watch')) {
+      utils.updateState();
       YouTubeBookmarker.init();
     }
   }
