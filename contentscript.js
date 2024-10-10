@@ -275,16 +275,55 @@ const YouTubeBookmarker = (function () {
           bookmark: bookmark
         });
         if (response && response.success) {
+          // Supprimer l'icône et la note du DOM
+          this.removeBookmarkFromDOM(bookmark);
+          // Supprimer le marque-page du stockage
+          await this.removeBookmarkFromStorage(bookmark);
           utils.afficherMessage("Marque-page supprimé !");
-          this.loadBookmarks();
         } else {
           console.error("Erreur lors de la suppression du marque-page:", response);
           utils.afficherMessage("Erreur lors de la suppression du marque-page. Veuillez vérifier la console pour plus de détails.", 'error');
         }
       } catch (error) {
-        console.error('Erreur lors de l\'envoi du message:', error);
+        console.error('Erreur lors de la suppression du marque-page:', error);
         utils.afficherMessage("Une erreur est survenue lors de la suppression du marque-page.", 'error');
       }
+    },
+
+    removeBookmarkFromDOM: function (bookmark) {
+      const bookmarkIcons = document.querySelectorAll('.custom-bookmark-icon-container');
+      bookmarkIcons.forEach(iconContainer => {
+        const iconPosition = parseFloat(iconContainer.style.left);
+        const bookmarkPosition = (bookmark.time / state.currentVideo.duration) * state.progressBar.offsetWidth;
+        if (Math.abs(iconPosition - bookmarkPosition) < 1) {
+          iconContainer.remove();
+        }
+      });
+    },
+
+    removeBookmarkFromStorage: function (bookmarkToRemove) {
+      return new Promise((resolve, reject) => {
+        chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+            return;
+          }
+
+          const updatedBookmarks = bookmarks.filter(bookmark => 
+            !(bookmark.url === bookmarkToRemove.url && 
+              bookmark.time === bookmarkToRemove.time &&
+              bookmark.note === bookmarkToRemove.note)
+          );
+
+          chrome.storage.sync.set({ bookmarks: updatedBookmarks }, () => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve();
+            }
+          });
+        });
+      });
     },
 
     loadBookmarks: function () {
