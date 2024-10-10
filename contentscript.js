@@ -79,6 +79,8 @@ const YouTubeBookmarker = (function () {
 
   // Gestion des marque-pages
   const bookmarkManager = {
+    defaultBookmarks: [],
+
     handleBookmarkAction: async function(action, bookmark) {
       if (!utils.isExtensionValid()) {
         console.error("Le contexte de l'extension n'est plus valide.");
@@ -239,24 +241,11 @@ const YouTubeBookmarker = (function () {
 
     addDefaultBookmarks: function() {
       if (state.currentVideo) {
-        const url = window.location.href;
-
-        const startBookmark = {
-          time: 0,
-          note: 'Début de la vidéo',
-          url: url
-        };
-
-        const endBookmark = {
-          time: state.currentVideo.duration,
-          note: 'Fin de la vidéo',
-          url: url
-        };
-
-        // Ici, vous pouvez ajouter la logique pour sauvegarder ces marque-pages par défaut
-        // Par exemple :
-        // this.addBookmark(startBookmark);
-        // this.addBookmark(endBookmark);
+        this.defaultBookmarks = [
+          { time: 0, note: 'Début de la vidéo' },
+          { time: state.currentVideo.duration, note: 'Fin de la vidéo' }
+        ];
+        console.log("Marque-pages par défaut ajoutés :", this.defaultBookmarks);
       } else {
         console.warn("Impossible d'ajouter les marque-pages par défaut : aucune vidéo trouvée.");
       }
@@ -347,17 +336,20 @@ const YouTubeBookmarker = (function () {
 
     navigateBookmarks: function (direction) {
       chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
-        if (!bookmarks || bookmarks.length === 0) return;
-
+        if (!bookmarks) bookmarks = [];
+        
         const currentTime = state.currentVideo.currentTime;
         const currentUrl = window.location.href;
         const videoBookmarks = bookmarks.filter(b => b.url === currentUrl);
+        
+        // Combiner les marque-pages normaux et les marque-pages par défaut
+        const allBookmarks = [...this.defaultBookmarks, ...videoBookmarks].sort((a, b) => a.time - b.time);
 
         if (direction === 'prev') {
-          const prevBookmark = videoBookmarks.reverse().find(b => b.time < currentTime);
+          const prevBookmark = allBookmarks.reverse().find(b => b.time < currentTime);
           if (prevBookmark) state.currentVideo.currentTime = prevBookmark.time;
         } else if (direction === 'next') {
-          const nextBookmark = videoBookmarks.find(b => b.time > currentTime);
+          const nextBookmark = allBookmarks.find(b => b.time > currentTime);
           if (nextBookmark) state.currentVideo.currentTime = nextBookmark.time;
         }
       });
@@ -554,11 +546,14 @@ const YouTubeBookmarker = (function () {
     if (state.currentVideo) {
       console.log("Vidéo trouvée, initialisation en cours...");
       uiManager.addBookmarkButton();
-      bookmarkManager.addDefaultBookmarks();
+      bookmarkManager.addDefaultBookmarks(); // Ajout des marque-pages par défaut
       bookmarkManager.loadBookmarks();
 
       state.currentVideo.addEventListener('play', handleVideoStateChange);
       state.currentVideo.addEventListener('pause', handleVideoStateChange);
+      state.currentVideo.addEventListener('loadedmetadata', () => {
+        bookmarkManager.addDefaultBookmarks(); // Mise à jour des marque-pages par défaut quand les métadonnées sont chargées
+      });
     } else {
       console.warn("Élément vidéo non trouvé. Nouvelle tentative dans 2 secondes.");
       setTimeout(init, 2000);
