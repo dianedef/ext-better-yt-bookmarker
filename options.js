@@ -15,6 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
    chrome.storage.sync.get('hideNotesByDefault', ({ hideNotesByDefault }) => {
      document.getElementById('hide-notes-by-default').checked = hideNotesByDefault || false;
    });
+   
+   // Charger l'option de masquer les boutons par défaut
+   chrome.storage.sync.get('showBookmarkButtons', ({ showBookmarkButtons }) => {
+     document.getElementById('showBookmarkButtons').checked = showBookmarkButtons || false;
+   });
 
    // Ajouter des écouteurs d'événements pour les champs de raccourcis
    const hotkeyInputs = document.querySelectorAll('input[type="text"]');
@@ -42,6 +47,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
    document.getElementById('hide-notes-by-default').addEventListener('change', (e) => {
      chrome.storage.sync.set({ hideNotesByDefault: e.target.checked }, () => {
+       afficherNotification('Option enregistrée !');
+     });
+   });
+
+   document.getElementById('showBookmarkButtons').addEventListener('change', (e) => {
+     chrome.storage.sync.set({ showBookmarkButtons: e.target.checked }, () => {
        afficherNotification('Option enregistrée !');
      });
    });
@@ -82,3 +93,22 @@ document.addEventListener('DOMContentLoaded', () => {
      });
    });
  });
+
+
+ 
+// Dans la fonction saveOptions()
+chrome.storage.sync.set({
+  // ... autres options ...
+  showBookmarkButtons: showBookmarkButtons.checked
+}, function() {
+  // Message de sauvegarde réussie
+});
+
+// Dans la fonction restoreOptions()
+chrome.storage.sync.get({
+  // ... autres options ...
+  showBookmarkButtons: false // valeur par défaut
+}, function(items) {
+  // ... autres options ...
+  showBookmarkButtons.checked = items.showBookmarkButtons;
+});
