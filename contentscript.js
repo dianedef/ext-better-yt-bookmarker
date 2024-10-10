@@ -232,11 +232,8 @@ const YouTubeBookmarker = (function () {
     },
 
     deleteBookmark: async function (bookmark) {
-      const confirmDelete = confirm(`Voulez-vous vraiment supprimer ce marque-page : "${bookmark.note}" ?`);
-
-      if (confirmDelete) {
-        await this.handleBookmarkAction('deleteBookmark', bookmark);
-      }
+      // Suppression de la confirmation
+      await this.handleBookmarkAction('deleteBookmark', bookmark);
     },
 
     loadBookmarks: function () {
