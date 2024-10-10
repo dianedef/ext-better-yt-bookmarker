@@ -11,6 +11,11 @@ document.addEventListener('DOMContentLoaded', () => {
      }
    });
  
+   // Charger l'option de masquer les notes par défaut
+   chrome.storage.sync.get('hideNotesByDefault', ({ hideNotesByDefault }) => {
+     document.getElementById('hide-notes-by-default').checked = hideNotesByDefault || false;
+   });
+
    // Ajouter des écouteurs d'événements pour les champs de raccourcis
    const hotkeyInputs = document.querySelectorAll('input[type="text"]');
    hotkeyInputs.forEach(input => {
@@ -32,6 +37,12 @@ document.addEventListener('DOMContentLoaded', () => {
        chrome.storage.sync.set({ hotkeys }, () => {
          afficherNotification('Raccourci enregistré !');
        });
+     });
+   });
+
+   document.getElementById('hide-notes-by-default').addEventListener('change', (e) => {
+     chrome.storage.sync.set({ hideNotesByDefault: e.target.checked }, () => {
+       afficherNotification('Option enregistrée !');
      });
    });
 
