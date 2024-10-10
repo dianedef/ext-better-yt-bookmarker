@@ -1,16 +1,16 @@
+// Déplacer CONSTANTS en dehors du module YouTubeBookmarker
+const CONSTANTS = {
+  BOOKMARK_BUTTON_ID: 'bookmark-button',
+  BOOKMARK_ICON_CLASS: 'custom-bookmark-icon',
+  BOOKMARK_ICON_CONTAINER_CLASS: 'custom-bookmark-icon-container',
+  BOOKMARK_DELETE_ICON_CLASS: 'custom-bookmark-delete-icon',
+  BOOKMARK_INPUT_CONTAINER_CLASS: 'bookmark-input-container'
+};
+
 // Module principal
 const YouTubeBookmarker = (function () {
-  // Constantes
-  const CONSTANTS = {
-    BOOKMARK_BUTTON_ID: 'bookmark-button',
-    BOOKMARK_ICON_CLASS: 'custom-bookmark-icon',
-    BOOKMARK_ICON_CONTAINER_CLASS: 'custom-bookmark-icon-container',
-    BOOKMARK_DELETE_ICON_CLASS: 'custom-bookmark-delete-icon',
-    BOOKMARK_INPUT_CONTAINER_CLASS: 'bookmark-input-container'
-  };
-
   // État de l'application
-  const state = {
+  let state = {
     currentVideo: null,
     isExtensionReady: true,
     player: null,
@@ -22,6 +22,20 @@ const YouTubeBookmarker = (function () {
     bookmarkInputElement: null
   };
 
+  // Fonction pour réinitialiser l'état
+  function resetState() {
+    state = {
+      currentVideo: null,
+      isExtensionReady: true,
+      player: null,
+      bookmarkButton: null,
+      timeDisplay: null,
+      progressBar: null,
+      bookmarkInputVisible: false,
+      bookmarkInputContainer: null,
+      bookmarkInputElement: null
+    };
+  }
 
   // Fonctions utilitaires
   const utils = {
@@ -39,7 +53,6 @@ const YouTubeBookmarker = (function () {
       state.player = document.querySelector('.html5-video-player');
       state.bookmarkButton = document.getElementById(CONSTANTS.BOOKMARK_BUTTON_ID);
       state.currentVideo = document.querySelector('video');
-      // Mise à jour des nouvelles références DOM
       state.timeDisplay = document.querySelector('.ytp-time-display');
       state.progressBar = state.player ? state.player.querySelector('.ytp-progress-bar') : null;
       console.log("État mis à jour :", state);
@@ -73,7 +86,7 @@ const YouTubeBookmarker = (function () {
 
       setTimeout(() => {
         messageContainer.remove();
-      }, 3000);
+      }, 30);
     }
   };
 
@@ -241,11 +254,13 @@ const YouTubeBookmarker = (function () {
 
     addDefaultBookmarks: function() {
       if (state.currentVideo) {
-        this.defaultBookmarks = [
-          { time: 0, note: 'Début de la vidéo' },
-          { time: state.currentVideo.duration, note: 'Fin de la vidéo' }
-        ];
-        console.log("Marque-pages par défaut ajoutés :", this.defaultBookmarks);
+        if (!this.defaultBookmarks) {
+          this.defaultBookmarks = [
+            { time: 0, note: 'Début de la vidéo' },
+            { time: state.currentVideo.duration, note: 'Fin de la vidéo' }
+          ];
+          console.log("Marque-pages par défaut ajoutés :", this.defaultBookmarks);
+        }
       } else {
         console.warn("Impossible d'ajouter les marque-pages par défaut : aucune vidéo trouvée.");
       }
@@ -382,45 +397,45 @@ const YouTubeBookmarker = (function () {
         return;
       }
       
-      if (state.timeDisplay && !state.bookmarkButton) {
-        console.log("Ajout du bouton de marque-page");
-        const button = document.createElement('button');
-        button.id = CONSTANTS.BOOKMARK_BUTTON_ID;
-        button.title = 'Ajouter un marque-page';
-        
-        // Créer une icône SVG pour le bouton
-        const svgIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svgIcon.setAttribute("viewBox", "0 0 24 24");
-        svgIcon.setAttribute("width", "18");
-        svgIcon.setAttribute("height", "18");
-        svgIcon.innerHTML = '<path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z" fill="white"/>';
-        
-        const buttonText = document.createElement('span');
-        buttonText.textContent = 'Ajouter un marque-page';
-        
-        button.appendChild(svgIcon);
-        button.appendChild(buttonText);
-        
-        // Utilisation de state.timeDisplay au lieu de document.querySelector
-        state.timeDisplay.parentNode.insertBefore(button, state.timeDisplay.nextSibling);
-        state.bookmarkButton = button;
-        
-        button.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          console.log("Bouton de marque-page cliqué");
-          
-          try {
-            bookmarkManager.handleAddBookmark();
-          } catch (error) {
-            console.error("Erreur lors de l'ajout du marque-page:", error);
-          }
-        });
-        console.log("Bouton de marque-page ajouté avec succès après l'affichage du temps.");
-      } else {
-        console.warn("Impossible d'ajouter le bouton de marque-page. Affichage du temps non trouvé ou bouton déjà présent.");
+      if (document.getElementById(CONSTANTS.BOOKMARK_BUTTON_ID)) {
+        // Le bouton existe déjà, rien à faire
+        return;
       }
+
+      state.timeDisplay = document.querySelector('.ytp-time-display');
+      if (!state.timeDisplay) {
+        console.warn("Impossible d'ajouter le bouton de marque-page. Affichage du temps non trouvé.");
+        return;
+      }
+
+      console.log("Ajout du bouton de marque-page");
+      const button = document.createElement('button');
+      button.id = CONSTANTS.BOOKMARK_BUTTON_ID;
+      button.title = 'Ajouter un marque-page';
       
+      // Créer une icône SVG pour le bouton
+      const svgIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svgIcon.setAttribute("viewBox", "0 0 24 24");
+      svgIcon.setAttribute("width", "18");
+      svgIcon.setAttribute("height", "18");
+      svgIcon.innerHTML = '<path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2zm0 15l-5-2.18L7 18V5h10v13z" fill="white"/>';
+      
+      const buttonText = document.createElement('span');
+      buttonText.textContent = 'Ajouter un marque-page';
+      
+      button.appendChild(svgIcon);
+      button.appendChild(buttonText);
+      
+      state.timeDisplay.parentNode.insertBefore(button, state.timeDisplay.nextSibling);
+      state.bookmarkButton = button;
+      
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        bookmarkManager.handleAddBookmark();
+      });
+
+      console.log("Bouton de marque-page ajouté avec succès après l'affichage du temps.");
     },
     
     addBookmarkIcon: function (bookmark) {
@@ -532,6 +547,28 @@ const YouTubeBookmarker = (function () {
   };
 
   // Initialisation et gestion des événements
+  const MAX_INIT_ATTEMPTS = 3;
+  const INIT_RETRY_DELAY = 5000; // 5 secondes
+  let initAttempts = 0;
+
+  const waitForYouTubePlayer = function () {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const maxAttempts = 10;
+      const checkPlayer = () => {
+        if (state.player && state.player.getBoundingClientRect().width > 0) {
+          resolve();
+        } else if (attempts >= maxAttempts) {
+          reject(new Error("Impossible de trouver le lecteur YouTube après plusieurs tentatives."));
+        } else {
+          attempts++;
+          setTimeout(checkPlayer, 1000);
+        }
+      };
+      checkPlayer();
+    });
+  };
+
   const init = function () {
     console.log("Initialisation de l'extension");
     if (!utils.isExtensionValid()) {
@@ -539,30 +576,55 @@ const YouTubeBookmarker = (function () {
       return;
     }
 
+    if (document.getElementById(CONSTANTS.BOOKMARK_BUTTON_ID)) {
+      console.log("Le bouton de marque-page est déjà présent. Initialisation ignorée.");
+      return;
+    }
+
+    resetState();
     utils.updateState();
     uiManager.addDynamicStyles();
     setupHotkeys();
 
-    if (state.currentVideo) {
-      console.log("Vidéo trouvée, initialisation en cours...");
+    waitForYouTubePlayer().then(() => {
+      console.log("Lecteur YouTube trouvé, initialisation en cours...");
       uiManager.addBookmarkButton();
-      bookmarkManager.addDefaultBookmarks(); // Ajout des marque-pages par défaut
-      bookmarkManager.loadBookmarks();
+      
+      if (state.currentVideo) {
+        state.currentVideo.addEventListener('loadedmetadata', () => {
+          bookmarkManager.addDefaultBookmarks();
+        });
+        bookmarkManager.loadBookmarks();
 
-      state.currentVideo.addEventListener('play', handleVideoStateChange);
-      state.currentVideo.addEventListener('pause', handleVideoStateChange);
-      state.currentVideo.addEventListener('loadedmetadata', () => {
-        bookmarkManager.addDefaultBookmarks(); // Mise à jour des marque-pages par défaut quand les métadonnées sont chargées
-      });
-    } else {
-      console.warn("Élément vidéo non trouvé. Nouvelle tentative dans 2 secondes.");
-      setTimeout(init, 2000);
-    }
+        state.currentVideo.addEventListener('play', handleVideoStateChange);
+        state.currentVideo.addEventListener('pause', handleVideoStateChange);
+      } else {
+        console.warn("Élément vidéo non trouvé après l'initialisation du lecteur.");
+      }
+    }).catch(error => {
+      console.error("Erreur lors de l'initialisation:", error);
+    });
+  };
+
+  const waitForVideo = function () {
+    return new Promise((resolve) => {
+      const checkVideo = () => {
+        const video = document.querySelector('video');
+        if (video && video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+          resolve(video);
+        } else {
+          setTimeout(checkVideo, 100);
+        }
+      };
+      checkVideo();
+    });
   };
 
   const handleVideoStateChange = function () {
     if (!utils.isExtensionValid()) return;
-    bookmarkManager.loadBookmarks();
+    waitForYouTubePlayer().then(() => {
+      bookmarkManager.loadBookmarks();
+    });
   };
 
   const setupHotkeys = function () {
@@ -608,24 +670,38 @@ const YouTubeBookmarker = (function () {
     init: init,
     addBookmark: bookmarkManager.addBookmark,
     deleteBookmark: bookmarkManager.deleteBookmark,
-    navigateBookmarks: bookmarkManager.navigateBookmarks
+    navigateBookmarks: bookmarkManager.navigateBookmarks,
+    utils: utils,  // Exposer utils dans l'API publique
+    resetState: resetState
   };
 })();
 
+// Fonction pour initialiser l'extension avec un délai
+function initExtension() {
+  if (!window.location.href.includes('youtube.com/watch')) {
+    return;
+  }
+
+  if (!document.getElementById(CONSTANTS.BOOKMARK_BUTTON_ID)) {
+    YouTubeBookmarker.init();
+  }
+}
+
 // Initialisation au chargement de la page
-if (window.location.href.includes('youtube.com/watch')) {
-  YouTubeBookmarker.init();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initExtension);
+} else {
+  initExtension();
 }
 
 // Écouteur pour les changements d'URL (navigation sur YouTube)
 let lastUrl = location.href;
-new MutationObserver(() => {
+const urlObserver = new MutationObserver(() => {
   const url = location.href;
   if (url !== lastUrl) {
     lastUrl = url;
-    if (url.includes('youtube.com/watch')) {
-      utils.updateState();
-      YouTubeBookmarker.init();
-    }
+    initExtension();
   }
-}).observe(document, { subtree: true, childList: true });
+});
+
+urlObserver.observe(document, { subtree: true, childList: true });
