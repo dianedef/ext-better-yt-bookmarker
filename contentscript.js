@@ -498,10 +498,22 @@ const YouTubeBookmarker = (function () {
             bookmarkManager.deleteBookmark(bookmark);
           });
 
-          // Ajouter les écouteurs d'événements pour le survol
+          // Déplacer l'écouteur de clic de molette ici
           icon.addEventListener('mouseenter', () => {
             console.log("Survol de l'icône");
             infoContainer.style.display = 'block';
+
+            // Ajouter l'écouteur pour le clic de molette lors du survol
+            icon.addEventListener('pointerdown', (e) => {
+              console.log("Événement pointerdown détecté"); // Log pour vérifier si l'événement est capturé
+
+              if (e.button === 1) { // Vérifie si le clic est un clic de molette
+                e.preventDefault(); // Empêche le comportement par défaut du clic de molette
+                console.log("Clic de molette détecté sur l'icône de marque-page");
+                e.stopPropagation();
+                bookmarkManager.deleteBookmark(bookmark);
+              }
+            });
           });
 
           icon.addEventListener('mouseleave', () => {
