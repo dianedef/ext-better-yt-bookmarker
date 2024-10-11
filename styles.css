@@ -14,14 +14,13 @@
    margin-right: 5px !important;
 }
 
-/* Styles pour le conteneur d'icône de signet */
+/* Styles pour les icônes et conteneurs de signets */
 .custom-bookmark-icon-container {
    position: absolute;
    bottom: 40px;
    z-index: 2000;
 }
 
-/* Styles pour l'icône de signet personnalisée */
 .custom-bookmark-icon {
    width: 20px;
    height: 20px;
@@ -36,7 +35,6 @@
    height: 23px;
 }
 
-/* Styles pour le conteneur d'informations du signet */
 .custom-bookmark-info-container {
    position: absolute;
    bottom: 25px;
@@ -76,7 +74,7 @@
    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
 }
 
-/* Afficher la poubelle au survol de l'icône de signet ou du conteneur d'info */
+/* Affichage des éléments au survol */
 .custom-bookmark-icon-container:hover .custom-bookmark-delete-icon,
 .custom-bookmark-info-container:hover .custom-bookmark-delete-icon {
    opacity: 1;
@@ -103,7 +101,7 @@
    transition-delay: 1s;
 }
 
-/* Styles pour les messages d'erreur et d'information */
+/* Styles pour les messages */
 .youtube-bookmarker-message {
    position: fixed;
    top: 10px;
@@ -111,17 +109,19 @@
    padding: 10px;
    border-radius: 5px;
    z-index: 9999;
-   color: #333;
-   box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+   font-family: Arial, sans-serif;
 }
 
 .youtube-bookmarker-message.info {
-   background-color: #ccffcc;
+   background-color: #e8f5e9;
+   color: #1b5e20;
+   border: 1px solid #1b5e20;
 }
 
 .youtube-bookmarker-message.error {
-   background-color: #ffcccc;
-   border: 1px solid #ff0000;
+   background-color: #ffebee;
+   color: #b71c1c;
+   border: 1px solid #b71c1c;
 }
 
 /* Pour addBookmark */
@@ -132,33 +132,7 @@
    transform: translateX(-50%);
 }
 
-/* Styles pour le conteneur d'entrée de signet */
 .bookmark-input {
    margin-right: 10px;
    padding: 5px;
 }
-
-
-
-
-.youtube-bookmarker-message {
-   position: fixed;
-   top: 10px;
-   right: 10px;
-   padding: 10px;
-   border-radius: 5px;
-   z-index: 9999;
-   font-family: Arial, sans-serif;
- }
- 
- .youtube-bookmarker-message.info {
-   background-color: #e3f2fd;
-   color: #0d47a1;
-   border: 1px solid #0d47a1;
- }
- 
- .youtube-bookmarker-message.error {
-   background-color: #ffebee;
-   color: #b71c1c;
-   border: 1px solid #b71c1c;
- }

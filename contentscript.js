@@ -86,7 +86,7 @@ const YouTubeBookmarker = (function () {
 
       setTimeout(() => {
         messageContainer.remove();
-      }, 30000); // Le message disparaît après 30 secondes
+      }, 3000); // Le message disparaît après 30 secondes
     }
   };
 
@@ -108,6 +108,7 @@ const YouTubeBookmarker = (function () {
         });
         if (response && response.success) {
           this.loadBookmarks();
+          utils.afficherMessage("Marque-page ajouté avec succès !", 'info');
         } else {
           console.error(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page:`, response);
           utils.afficherMessage(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page. Veuillez vérifier la console pour plus de détails.`, 'error');
