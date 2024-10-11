@@ -331,6 +331,7 @@ const YouTubeBookmarker = (function () {
     },
 
     loadBookmarks: function () {
+      console.log("Début de loadBookmarks");
       if (!utils.isExtensionValid()) {
         console.error("Le contexte de l'extension n'est plus valide.");
         return;
@@ -341,10 +342,15 @@ const YouTubeBookmarker = (function () {
           console.error("Erreur lors de l'accès au stockage :", chrome.runtime.lastError);
           return;
         }
+        console.log("Bookmarks récupérés :", bookmarks);
         if (bookmarks && Array.isArray(bookmarks)) {
           const videoBookmarks = bookmarks.filter(b => b.url === window.location.href);
+          console.log("Bookmarks pour cette vidéo :", videoBookmarks);
           uiManager.removeExistingBookmarkIcons();
-          videoBookmarks.forEach(uiManager.addBookmarkIcon);
+          videoBookmarks.forEach(bookmark => {
+            console.log("Ajout de l'icône pour le bookmark :", bookmark);
+            uiManager.addBookmarkIcon(bookmark);
+          });
         }
       });
     },
@@ -439,10 +445,10 @@ const YouTubeBookmarker = (function () {
     },
     
     addBookmarkIcon: function (bookmark) {
-      console.log("Début de addBookmarkIcon pour le marque-page :", bookmark);
+      console.log("Début de addBookmarkIcon pour le bookmark :", bookmark);
       
       if (state.player && state.progressBar) {
-        console.log("state.player trouvé :", state.player);
+        console.log("state.player et state.progressBar sont disponibles");
         
         const iconContainer = document.createElement('div');
         iconContainer.className = 'custom-bookmark-icon-container';
@@ -515,12 +521,21 @@ const YouTubeBookmarker = (function () {
         iconContainer.appendChild(icon);
         iconContainer.appendChild(infoContainer);
         state.player.appendChild(iconContainer);
+        console.log("Icône ajoutée au DOM");
         
-        console.log("Tous les éléments ont été ajoutés au DOM");
+        // Ajout d'un observateur de redimensionnement
+        const resizeObserver = new ResizeObserver(() => {
+          if (state.currentVideo && state.progressBar) {
+            const newPosition = (bookmark.time / state.currentVideo.duration) * state.progressBar.offsetWidth;
+            iconContainer.style.left = `${newPosition}px`;
+          }
+        });
+        resizeObserver.observe(state.player);
 
-        // ... Le reste du code pour l'observateur de redimensionnement reste inchangé
+        // Nettoyage de l'observateur lors de la suppression de l'icône
+        iconContainer.addEventListener('remove', () => resizeObserver.disconnect());
       } else {
-        console.error("Le lecteur vidéo au moment de l'ajout des icônes de notes n'est pas disponible dans l'état actuel.");
+        console.error("state.player ou state.progressBar non disponible");
       }
     },
 
@@ -556,7 +571,10 @@ const YouTubeBookmarker = (function () {
       let attempts = 0;
       const maxAttempts = 10;
       const checkPlayer = () => {
-        if (state.player && state.player.getBoundingClientRect().width > 0) {
+        state.player = document.querySelector('.html5-video-player');
+        state.currentVideo = document.querySelector('video');
+        state.progressBar = document.querySelector('.ytp-progress-bar');
+        if (state.player && state.currentVideo && state.progressBar && state.player.getBoundingClientRect().width > 0) {
           resolve();
         } else if (attempts >= maxAttempts) {
           reject(new Error("Impossible de trouver le lecteur YouTube après plusieurs tentatives."));
@@ -570,7 +588,7 @@ const YouTubeBookmarker = (function () {
   };
 
   const init = function () {
-    console.log("Initialisation de l'extension");
+    console.log("Début de init");
     if (!utils.isExtensionValid()) {
       console.error("Extension non valide");
       return;
@@ -586,24 +604,28 @@ const YouTubeBookmarker = (function () {
     uiManager.addDynamicStyles();
     setupHotkeys();
 
-    waitForYouTubePlayer().then(() => {
-      console.log("Lecteur YouTube trouvé, initialisation en cours...");
-      uiManager.addBookmarkButton();
-      
-      if (state.currentVideo) {
-        state.currentVideo.addEventListener('loadedmetadata', () => {
-          bookmarkManager.addDefaultBookmarks();
-        });
-        bookmarkManager.loadBookmarks();
+    waitForYouTubePlayer()
+      .then(() => {
+        console.log("Lecteur YouTube trouvé, initialisation en cours...");
+        uiManager.addBookmarkButton();
+        if (state.currentVideo) {
+          state.currentVideo.addEventListener('loadedmetadata', () => {
+            bookmarkManager.addDefaultBookmarks();
+            bookmarkManager.loadBookmarks();
+          });
 
-        state.currentVideo.addEventListener('play', handleVideoStateChange);
-        state.currentVideo.addEventListener('pause', handleVideoStateChange);
-      } else {
-        console.warn("Élément vidéo non trouvé après l'initialisation du lecteur.");
-      }
-    }).catch(error => {
-      console.error("Erreur lors de l'initialisation:", error);
-    });
+          state.currentVideo.addEventListener('play', handleVideoStateChange);
+          state.currentVideo.addEventListener('pause', handleVideoStateChange);
+          
+          // Ajout d'un appel immédiat à loadBookmarks
+          bookmarkManager.loadBookmarks();
+        } else {
+          console.warn("Élément vidéo non trouvé après l'initialisation du lecteur.");
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de l'initialisation:", error);
+      });
   };
 
   const waitForVideo = function () {
@@ -665,43 +687,56 @@ const YouTubeBookmarker = (function () {
     });
   };
 
+  const reinitializeExtension = function() {
+    console.log("Début de reinitializeExtension");
+    console.log("Réinitialisation de l'extension...");
+    
+    // Supprimer les anciens écouteurs d'événements et éléments
+    cleanupOldElements();
+    
+    // Réinitialiser l'état et relancer l'initialisation
+    resetState();
+    setTimeout(init, 500); // Attendre 500ms pour s'assurer que la nouvelle page est chargée
+  };
+
+  const cleanupOldElements = function() {
+    if (state.currentVideo) {
+      state.currentVideo.removeEventListener('play', handleVideoStateChange);
+      state.currentVideo.removeEventListener('pause', handleVideoStateChange);
+    }
+    
+    document.getElementById(CONSTANTS.BOOKMARK_BUTTON_ID)?.remove();
+    uiManager.removeExistingBookmarkIcons();
+  };
+
   // API publique
   return {
     init: init,
     addBookmark: bookmarkManager.addBookmark,
     deleteBookmark: bookmarkManager.deleteBookmark,
     navigateBookmarks: bookmarkManager.navigateBookmarks,
-    utils: utils,  // Exposer utils dans l'API publique
-    resetState: resetState
+    utils: utils,
+    resetState: resetState,
+    reinitializeExtension: reinitializeExtension
   };
 })();
 
-// Fonction pour initialiser l'extension avec un délai
-function initExtension() {
-  if (!window.location.href.includes('youtube.com/watch')) {
-    return;
-  }
-
-  if (!document.getElementById(CONSTANTS.BOOKMARK_BUTTON_ID)) {
-    YouTubeBookmarker.init();
-  }
-}
-
-// Initialisation au chargement de la page
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initExtension);
-} else {
-  initExtension();
-}
-
-// Écouteur pour les changements d'URL (navigation sur YouTube)
+// Utiliser l'API History au lieu de MutationObserver pour une meilleure performance
 let lastUrl = location.href;
-const urlObserver = new MutationObserver(() => {
+window.addEventListener('yt-navigate-finish', () => {
+  console.log("Événement yt-navigate-finish déclenché");
   const url = location.href;
   if (url !== lastUrl) {
+    console.log("Nouvelle URL détectée :", url);
     lastUrl = url;
-    initExtension();
+    if (url.includes('youtube.com/watch')) {
+      console.log("Réinitialisation de l'extension pour la nouvelle vidéo");
+      YouTubeBookmarker.reinitializeExtension();
+    }
   }
 });
 
-urlObserver.observe(document, { subtree: true, childList: true });
+// Initialisation au chargement de la page
+if (window.location.href.includes('youtube.com/watch')) {
+  YouTubeBookmarker.init();
+}

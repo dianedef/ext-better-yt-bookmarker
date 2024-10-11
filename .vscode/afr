@@ -1,0 +1,86 @@
+ajouter une barre de progression supplémentaire pour voir ou on en est a tout instant
+
+Dans le popup, nous allons avoir une liste des vidéos avec leurs notes
+
+
+Ligne numéro 1 : le logo de l'extension à gauche, une barre de recherche à droite
+
+Ligne numéro 2 - Première vidéo avec des bookmarks :
+
+      - le thumbnail de la vidéo apparaît en sur la gauche (cliquable, redirige vers la vidéo dans le même onglet pour un clic simple, dans un onglet en arrière plan pour un clic de molette, dans un onglet en avant plan pour un clic droit)
+      A droite du thumbnail, deux lignes:
+         - le titre de la vidéo apparaît (cliquable, redirige vers la vidéo dans le même onglet pour un clic simple, dans un onglet en arrière plan pour un clic de molette, dans un onglet en avant plan pour un clic droit)
+         - une ligne avec des boutons : Bookmarks (pour ouvrir, fermer la liste des notes liées à la vidéo) et Delete (pour supprimer toutes les notes liées à la vidéo et la vidéo en elle même du popup)
+
+   Quand on clique sur le toggle pour ouvrir les notes on a un tableau :         
+      - à gauche le timestamp cliquable qui permet de venir directement sur la vidéo à l'endroit du bookmark avec le même mécanisme de clic que le titre de la vidéo (clic gauche ouvre dans l'onglet, clic droit ouvre dans un nouvel onglet en avant plan, clic de molette ouvre dans un nouvel onglet en arrière plan)
+      - à droite la note pour chaque timestamp
+      - à droite un bouton "x" pour supprimer la note
+
+
+Refaire la même chose pour chaque vidéo.        
+   Ligne numéro 4 :
+   
+Sur la dernière ligne en bas (sticky, même quand il y a une longue liste de vidéos), un bouton pour exporter les notes en Markdown, 5 étoile avec un lien vers la page d'extension au milieu et un bouton pour ouvrir les paramètres de l'extension.
+
+
+
+ajouter une fonctionnalité d'export des notes, en Markdown, selon ce format:
+
+## Titre de la vidéo numéro1
+[titre de l'url](url)
+
+[timestamp][url du timestamp] : note numéro1
+[timestamp][url du timestamp] : note numéro2
+[timestamp][url du timestamp] : note numéro3
+[timestamp][url du timestamp] : note numéroN
+
+## Titre de la vidéo numéro2
+[titre de l'url](url)
+
+[timestamp][url du timestamp] : note numéro1
+[timestamp][url du timestamp] : note numéro2
+[timestamp][url du timestamp] : note numéro3
+[timestamp][url du timestamp] : note numéroN
+
+## Titre de la vidéo numéroN
+[titre de l'url](url)
+
+[timestamp][url du timestamp] : note numéro1
+[timestamp][url du timestamp] : note numéro2
+[timestamp][url du timestamp] : note numéro3
+[timestamp][url du timestamp] : note numéroN
+
+
+les défaults bookmark marchent pas
+- bouton supprimer pour chaque vidéo (supprime toutes les notes de la vidéo) et chaque note.
+supprimer une note ne supprime pas l'icone de bookmark
+
+
+
+
+Cette approche devrait résoudre le problème de tentatives en boucle tout en assurant que le bouton est ajouté de manière fiable lorsque possible. Merci pour votre patience et pour avoir souligné cette erreur importante.
+
+1. Vérifie d'abord si le bouton existe déjà. Si c'est le cas, elle ne fait rien et se termine.
+Cherche ensuite l'élément d'affichage du temps. S'il n'est pas trouvé, elle affiche un avertissement et se termine.
+Si les conditions sont remplies, elle ajoute le bouton une seule fois.
+
+Cette approche garantit que :
+1. L'initialisation ne se fait que sur les pages de vidéo YouTube.
+L'extension n'est initialisée que si le bouton n'existe pas déjà.
+L'initialisation est tentée à chaque changement d'URL, mais n'ajoute le bouton que s'il n'est pas déjà présent.
+
+e return true à la ligne 346 est effectivement la source du problème. Cette instruction fait que la fonction addButton renvoie true même si le bouton existe déjà, ce qui peut conduire à des tentatives répétées d'ajout du bouton.
+Nous vérifions d'abord si le bouton existe déjà. Si c'est le cas, la fonction se termine immédiatement sans rien faire.
+2. Si l'affichage du temps n'est pas trouvé, la fonction se termine également.
+Le bouton n'est ajouté que si ces deux conditions sont remplies.
+Il n'y a plus de return true qui pourrait induire en erreur sur le succès de l'opération.
+Cette approche garantit que le bouton n'est ajouté qu'une seule fois au DOM et évite toute tentative inutile d'ajout si le bouton existe déjà.
+Merci d'avoir identifié ce problème spécifique. Cette correction devrait résoudre les problèmes de tentatives répétées d'ajout du bouton.
+
+Nous avons créé une fonction récursive findTimeDisplayAndAddButton qui tente de trouver l'affichage du temps.
+Si l'affichage du temps est trouvé, elle appelle immédiatement createAndAddButton pour ajouter le bouton.
+Si l'affichage du temps n'est pas trouvé, elle réessaie jusqu'à 10 fois, avec un délai d'une seconde entre chaque tentative.
+Si après 10 tentatives l'affichage du temps n'est toujours pas trouvé, elle affiche un message d'erreur dans la console et à l'utilisateur.
+La création et l'ajout du bouton ont été déplacés dans une méthode séparée createAndAddButton pour plus de clarté.
+Cette approche devrait résoudre le problème de manière plus robuste, en donnant suffisamment de temps pour que l'affichage du temps apparaisse, tout en évitant une boucle infinie si pour une raison quelconque il n'apparaît jamais.
