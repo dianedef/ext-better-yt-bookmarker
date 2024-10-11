@@ -579,11 +579,6 @@ const YouTubeBookmarker = (function () {
     }
   };
 
-  // Initialisation et gestion des événements
-  const MAX_INIT_ATTEMPTS = 3;
-  const INIT_RETRY_DELAY = 5000; // 5 secondes
-  let initAttempts = 0;
-
   const waitForYouTubePlayer = function () {
     return new Promise((resolve, reject) => {
       let attempts = 0;
@@ -604,6 +599,70 @@ const YouTubeBookmarker = (function () {
     });
   };
 
+  let clickCount = 0;
+  let lastClickTime = 0;
+  let lastVideoTime = 0;
+
+  function handleProgressBarClick(event) {
+    const currentTime = new Date().getTime();
+    const timeSinceLastClick = currentTime - lastClickTime;
+
+    if (timeSinceLastClick < 500) {
+      clickCount++;
+    } else {
+      clickCount = 1;
+    }
+
+    lastClickTime = currentTime;
+
+    if (clickCount === 2) {
+      console.log("Double-clic détecté sur la barre de progression");
+
+      if (!state.progressBar || !state.currentVideo) {
+        console.warn("Barre de progression ou vidéo non disponible");
+        return;
+      }
+
+      const progressBarRect = state.progressBar.getBoundingClientRect();
+      const clickPosition = event.clientX - progressBarRect.left;
+      const clickRatio = clickPosition / progressBarRect.width;
+      lastVideoTime = clickRatio * state.currentVideo.duration;
+
+      state.currentVideo.currentTime = lastVideoTime;
+      console.log("Temps de la vidéo mis à jour :", state.currentVideo.currentTime);
+    }
+
+    if (clickCount === 3) {
+      console.log("Triple-clic détecté, ajout d'un marque-page sans note");
+
+      chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+        if (!bookmarks) bookmarks = [];
+
+        const currentUrl = window.location.href;
+        const existingBookmark = bookmarks.find(b =>
+          b.url === currentUrl && Math.abs(b.time - lastVideoTime) < 1
+        );
+
+        if (existingBookmark) {
+          console.log("Un marque-page existe déjà à cet endroit :", existingBookmark);
+          return;
+        }
+
+        const bookmark = {
+          time: lastVideoTime,
+          url: currentUrl,
+          note: '' // Marque-page sans note
+        };
+
+        bookmarkManager.handleBookmarkAction('addBookmark', bookmark);
+        console.log("Marque-page ajouté à :", lastVideoTime);
+      });
+
+      clickCount = 0; // Réinitialiser le compteur après le triple clic
+    }
+  }
+
+  // Ajoutez cet écouteur d'événement lors de l'initialisation
   const init = function () {
     console.log("Début de init");
     if (!utils.isExtensionValid()) {
@@ -634,6 +693,10 @@ const YouTubeBookmarker = (function () {
           state.currentVideo.addEventListener('play', handleVideoStateChange);
           state.currentVideo.addEventListener('pause', handleVideoStateChange);
 
+          // Remplacez l'écouteur de double-clic par un écouteur de clic
+          state.progressBar.addEventListener('click', handleProgressBarClick);
+          console.log("Écouteur de clic ajouté à la barre de progression");
+
           // Ajout d'un appel immédiat à loadBookmarks
           bookmarkManager.loadBookmarks();
         } else {
@@ -643,20 +706,6 @@ const YouTubeBookmarker = (function () {
       .catch(error => {
         console.error("Erreur lors de l'initialisation:", error);
       });
-  };
-
-  const waitForVideo = function () {
-    return new Promise((resolve) => {
-      const checkVideo = () => {
-        const video = document.querySelector('video');
-        if (video && video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
-          resolve(video);
-        } else {
-          setTimeout(checkVideo, 100);
-        }
-      };
-      checkVideo();
-    });
   };
 
   const checkAndResetState = function () {
