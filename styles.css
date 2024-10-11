@@ -137,3 +137,28 @@
    margin-right: 10px;
    padding: 5px;
 }
+
+
+
+
+.youtube-bookmarker-message {
+   position: fixed;
+   top: 10px;
+   right: 10px;
+   padding: 10px;
+   border-radius: 5px;
+   z-index: 9999;
+   font-family: Arial, sans-serif;
+ }
+ 
+ .youtube-bookmarker-message.info {
+   background-color: #e3f2fd;
+   color: #0d47a1;
+   border: 1px solid #0d47a1;
+ }
+ 
+ .youtube-bookmarker-message.error {
+   background-color: #ffebee;
+   color: #b71c1c;
+   border: 1px solid #b71c1c;
+ }
