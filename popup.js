@@ -6,20 +6,31 @@ document.addEventListener('DOMContentLoaded', () => {
        bookmarksList.innerHTML = '';
        if (bookmarks && bookmarks.length > 0) {
          bookmarks.forEach(bookmark => {
+           const thumbnailUrl = getThumbnailUrl(bookmark.url);
            const bookmarkElement = document.createElement('div');
            bookmarkElement.className = 'bookmark-item';
            bookmarkElement.innerHTML = `
-             <img src="${bookmark.thumbnail}" alt="${bookmark.title}" width="120">
-             <h3>${bookmark.title}</h3>
-             <a href="${bookmark.url}" target="_blank">Voir la vidéo</a>
-             <button class="delete-bookmark" data-time="${bookmark.time}" data-url="${bookmark.url}">🗑️</button>
+             <img src="${thumbnailUrl}" alt="${bookmark.title}" width="120">
+             <div>
+               <h3><a href="${bookmark.url}" target="_blank">${bookmark.title}</a></h3>
+               <div>
+                 <button class="toggle-notes">Bookmarks</button>
+                 <button class="delete-video" data-url="${bookmark.url}">Delete</button>
+               </div>
+             </div>
+             <div class="notes-list">
+               <!-- Les notes seront ajoutées ici dynamiquement -->
+             </div>
            `;
            bookmarksList.appendChild(bookmarkElement);
-         });
 
-         // Ajouter des écouteurs d'événements pour les boutons de suppression
-         document.querySelectorAll('.delete-bookmark').forEach(button => {
-           button.addEventListener('click', deleteBookmark);
+           // Ajouter un écouteur d'événement pour le bouton de basculement des notes
+           const toggleNotesButton = bookmarkElement.querySelector('.toggle-notes');
+           toggleNotesButton.addEventListener('click', toggleNotes);
+
+           // Ajouter un écouteur d'événement pour le bouton de suppression de la vidéo
+           const deleteVideoButton = bookmarkElement.querySelector('.delete-video');
+           deleteVideoButton.addEventListener('click', deleteVideo);
          });
        } else {
          bookmarksList.textContent = 'Aucun marque-page enregistré.';
@@ -27,22 +38,37 @@ document.addEventListener('DOMContentLoaded', () => {
      });
    }
 
-   function deleteBookmark(event) {
-     const time = parseFloat(event.target.dataset.time);
-     const url = event.target.dataset.url;
-
-     chrome.runtime.sendMessage({ 
-       action: 'deleteBookmark', 
-       time: time,
-       url: url
-     }, (response) => {
-       if (response && response.success) {
-         loadBookmarks();
-       } else {
-         console.error('Erreur lors de la suppression du marque-page');
-       }
-     });
+   function toggleNotes(event) {
+     const bookmarkItem = event.target.closest('.bookmark-item');
+     const notesList = bookmarkItem.querySelector('.notes-list');
+     // Charger et afficher/masquer les notes ici
    }
+
+   function deleteVideo(event) {
+     const url = event.target.dataset.url;
+     // Supprimer la vidéo et toutes ses notes associées ici
+   }
+
+   function getThumbnailUrl(videoUrl) {
+     const videoId = new URL(videoUrl).searchParams.get('v');
+     return `https://img.youtube.com/vi/${videoId}/0.jpg`;
+   }
+
+   // Ajouter les boutons d'exportation, de notation et de paramètres
+   const bottomBar = document.createElement('div');
+   bottomBar.className = 'bottom-bar';
+   bottomBar.innerHTML = `
+     <button id="export-notes">Exporter en Markdown</button>
+     <div class="rating">
+       <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+     </div>
+     <button id="settings">Paramètres</button>
+   `;
+   document.body.appendChild(bottomBar);
+
+   // Ajouter des écouteurs d'événements pour les boutons de la barre inférieure
+   document.getElementById('export-notes').addEventListener('click', exportNotes);
+   document.getElementById('settings').addEventListener('click', openSettings);
 
    loadBookmarks();
  });

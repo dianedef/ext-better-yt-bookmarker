@@ -136,3 +136,37 @@
    margin-right: 10px;
    padding: 5px;
 }
+
+/* popup.html */
+html, body {
+   width: 800px;
+   height: 600px;
+   margin: 0;/* Supprimez les marges par défaut */
+   padding: 0; /* Sup primez le remplissage par défaut */
+   overflow: hidden; /* Évitez le défilement si nécessaire */  
+}
+.bookmark-item {
+   display: flex;
+   align-items: center;
+   margin-bottom: 10px;
+}
+.bookmark-item img {
+   margin-right: 10px;
+}
+.notes-list {
+   display: none;
+   margin-left: 20px;
+}
+.bottom-bar {
+   position: sticky;
+   bottom: 0;
+   background-color: #f0f0f0;
+   padding: 10px;
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+}
+.rating {
+   font-size: 24px;
+   color: gold;
+}

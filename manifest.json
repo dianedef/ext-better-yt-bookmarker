@@ -3,14 +3,8 @@
   "name": "YouTube Bookmarker",
   "version": "1.0",
   "description": "Marque-pages pour les vidéos YouTube avec notes et horodatages",
-  "permissions": [
-    "storage",
-    "tabs",
-    "activeTab"
-  ],
-  "host_permissions": [
-    "https://www.youtube.com/*"
-  ],
+  "permissions": ["storage", "tabs", "commands"],
+  "host_permissions": ["https://www.youtube.com/*"],
   "action": {
     "default_popup": "popup.html",
     "width": 800,
