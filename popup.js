@@ -1,3 +1,5 @@
+import { exportBookmarksAsMarkdown, exportBookmarksAsJSON } from './export.js'; 
+
 document.addEventListener('DOMContentLoaded', () => {
    const bookmarksList = document.getElementById('bookmarks-list');
  
@@ -66,9 +68,23 @@ document.addEventListener('DOMContentLoaded', () => {
    `;
    document.body.appendChild(bottomBar);
 
-   // Ajouter des écouteurs d'événements pour les boutons de la barre inférieure
+   // Ajouter des écouteurs d'événements 
    document.getElementById('export-notes').addEventListener('click', exportNotes);
    document.getElementById('settings').addEventListener('click', openSettings);
 
+
+   document.getElementById('export-markdown').addEventListener('click', () => {
+       chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+           exportBookmarksAsMarkdown(bookmarks);
+       });
+   });
+
+   document.getElementById('export-json').addEventListener('click', () => {
+       chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+           exportBookmarksAsJSON(bookmarks);
+       });
+   });
+
+   
    loadBookmarks();
  });

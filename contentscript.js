@@ -86,7 +86,7 @@ const YouTubeBookmarker = (function () {
 
       setTimeout(() => {
         messageContainer.remove();
-      }, 3000); // Le message disparaît après 30 secondes
+      }, 30000); // Le message disparaît après 30 secondes
     }
   };
 
@@ -95,31 +95,26 @@ const YouTubeBookmarker = (function () {
     defaultBookmarks: [],
 
     handleBookmarkAction: async function (action, bookmark) {
-      if ((action === 'addBookmark' || action === 'updateBookmark') && 
-          (!bookmark.url || !bookmark.time)) {
-        console.error("Données de marque-page invalides:", bookmark);
-        utils.afficherMessage("Erreur : Données de marque-page invalides.", 'error');
-        throw new Error("Données de marque-page invalides");
+      if (!utils.isExtensionValid()) {
+        console.error("Le contexte de l'extension n'est plus valide.");
+        utils.afficherMessage("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.", 'error');
+        return;
       }
 
       try {
-        const response = await utils.sendMessageToBackground({ action: action, bookmark: bookmark });
-        console.log("Réponse du background:", response);
-        if (response.success) {
-          await this.loadBookmarks();
-          let message = action === 'addBookmark' ? "Marque-page ajouté avec succès !" :
-                        action === 'deleteBookmark' ? "Marque-page supprimé avec succès !" :
-                        "Position du marque-page modifiée avec succès !";
-          utils.afficherMessage(message);
+        const response = await utils.sendMessageToBackground({
+          action: action,
+          bookmark: bookmark
+        });
+        if (response && response.success) {
+          this.loadBookmarks();
         } else {
-          throw new Error(response.error || "Erreur inconnue");
+          console.error(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page:`, response);
+          utils.afficherMessage(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page. Veuillez vérifier la console pour plus de détails.`, 'error');
         }
       } catch (error) {
-        const errorAction = action === 'addBookmark' ? 'l\'ajout' :
-                            action === 'deleteBookmark' ? 'la suppression' : 'la mise à jour';
-        console.error(`Erreur lors de ${errorAction} du marque-page:`, error);
-        utils.afficherMessage(`Erreur de communication avec l'extension lors de ${errorAction} du marque-page. Veuillez réessayer.`, 'error');
-        throw error;
+        console.error('Erreur lors de l\'envoi du message:', error);
+        utils.afficherMessage(`Une erreur est survenue lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page.`, 'error');
       }
     },
 
@@ -227,23 +222,17 @@ const YouTubeBookmarker = (function () {
       state.wasPlayingBeforeBookmark = wasPlaying;
     },
 
-    saveBookmark: function(time, note = '') {
-      const video = state.currentVideo;
-      if (!video) {
-        console.error("Aucune vidéo en cours de lecture");
-        utils.afficherMessage("Erreur : Aucune vidéo en cours de lecture", 'error');
-        return Promise.reject(new Error("Aucune vidéo en cours de lecture"));
-      }
-
+    saveBookmark: async function (note) {
+      const currentTime = state.currentVideo ? state.currentVideo.currentTime : 0;
+      const url = window.location.href;
       const bookmark = {
-        time: time,
-        note: note,
-        url: window.location.href
+        time: currentTime,
+        url: url,
+        note: note
       };
 
-      console.log("Tentative d'ajout de marque-page:", bookmark);
-
-      return this.handleBookmarkAction('addBookmark', bookmark);
+      this.closeBookmarkInput();
+      await this.handleBookmarkAction('addBookmark', bookmark);
     },
 
     closeBookmarkInput: function () {
@@ -277,24 +266,32 @@ const YouTubeBookmarker = (function () {
       }
     },
 
-    deleteBookmark: function (bookmark) {
+    deleteBookmark: async function (bookmark) {
       if (!utils.isExtensionValid()) {
         console.error("Le contexte de l'extension n'est plus valide.");
         utils.afficherMessage("Erreur : L'extension a été rechargée ou désactivée. Veuillez rafraîchir la page.", 'error');
-        return Promise.reject(new Error("Le contexte de l'extension n'est plus valide"));
+        return;
       }
 
-      return this.handleBookmarkAction('deleteBookmark', bookmark)
-        .then(() => {
+      try {
+        const response = await utils.sendMessageToBackground({
+          action: 'deleteBookmark',
+          bookmark: bookmark
+        });
+        if (response && response.success) {
           // Supprimer l'icône et la note du DOM
           this.removeBookmarkFromDOM(bookmark);
           // Supprimer le marque-page du stockage
-          return this.removeBookmarkFromStorage(bookmark);
-        })
-        .catch(error => {
-          console.error('Erreur lors de la suppression du marque-page:', error);
-          utils.afficherMessage("Une erreur est survenue lors de la suppression du marque-page. Veuillez réessayer.", 'error');
-        });
+          await this.removeBookmarkFromStorage(bookmark);
+          utils.afficherMessage("Marque-page supprimé !");
+        } else {
+          console.error("Erreur lors de la suppression du marque-page:", response);
+          utils.afficherMessage("Erreur lors de la suppression du marque-page. Veuillez vérifier la console pour plus de détails.", 'error');
+        }
+      } catch (error) {
+        console.error('Erreur lors de la suppression du marque-page:', error);
+        utils.afficherMessage("Une erreur est survenue lors de la suppression du marque-page.", 'error');
+      }
     },
 
     removeBookmarkFromDOM: function (bookmark) {
@@ -336,22 +333,23 @@ const YouTubeBookmarker = (function () {
     loadBookmarks: function (attempts = 0) {
       console.log("Début de loadBookmarks, tentative:", attempts + 1);
       if (!utils.isExtensionValid()) {
-        if (attempts < 30) {
+        if (attempts < 10) {
           console.warn("Le contexte de l'extension n'est pas valide. Nouvel essai dans 1 seconde.");
           setTimeout(() => this.loadBookmarks(attempts + 1), 1000);
-          return;
+        } else if (attempts < 30) {
+          console.error("Le contexte de l'extension reste invalide après 10 tentatives. Nouvel essai dans 1 seconde.");
+          setTimeout(() => this.loadBookmarks(attempts + 1), 1000);
         } else {
           console.error("Échec de l'initialisation de l'extension après 30 tentatives.");
           utils.afficherMessage("L'extension YouTube Bookmarker n'a pas pu s'initialiser correctement. Veuillez actualiser la page.", 'error');
-          return Promise.reject(new Error("Échec de l'initialisation de l'extension"));
         }
+        return;
       }
 
-      return new Promise((resolve, reject) => {
+      try {
         chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
           if (chrome.runtime.lastError) {
             console.error("Erreur lors de l'accès au stockage :", chrome.runtime.lastError);
-            reject(chrome.runtime.lastError);
             return;
           }
           console.log("Bookmarks récupérés :", bookmarks);
@@ -363,20 +361,16 @@ const YouTubeBookmarker = (function () {
               console.log("Ajout de l'icône pour le bookmark :", bookmark);
               uiManager.addBookmarkIcon(bookmark);
             });
-            resolve(videoBookmarks);
-          } else {
-            resolve([]);
           }
         });
-      }).catch(error => {
+      } catch (error) {
         console.warn("Erreur lors du chargement des marque-pages:", error);
-        utils.afficherMessage("Erreur lors du chargement des marque-pages. Veuillez réessayer.", 'error');
-      });
+      }
     },
 
     navigateBookmarks: function (direction) {
       chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
-        if (!bookmarks) bookmarks = []
+        if (!bookmarks) bookmarks = [];
 
         const currentTime = state.currentVideo.currentTime;
         const currentUrl = window.location.href;
@@ -386,17 +380,11 @@ const YouTubeBookmarker = (function () {
         const allBookmarks = [...this.defaultBookmarks, ...videoBookmarks].sort((a, b) => a.time - b.time);
 
         if (direction === 'prev') {
-          const prevBookmark = [...allBookmarks].reverse().find(b => b.time < currentTime);
-          if (prevBookmark) {
-            state.currentVideo.currentTime = prevBookmark.time;
-            console.log(`Navigué vers le signet précédent : ${prevBookmark.note}`);
-          }
+          const prevBookmark = allBookmarks.reverse().find(b => b.time < currentTime);
+          if (prevBookmark) state.currentVideo.currentTime = prevBookmark.time;
         } else if (direction === 'next') {
           const nextBookmark = allBookmarks.find(b => b.time > currentTime);
-          if (nextBookmark) {
-            state.currentVideo.currentTime = nextBookmark.time;
-            console.log(`Navigué vers le signet suivant : ${nextBookmark.note}`);
-          }
+          if (nextBookmark) state.currentVideo.currentTime = nextBookmark.time;
         }
       });
     },
@@ -556,63 +544,6 @@ const YouTubeBookmarker = (function () {
             state.currentVideo.currentTime = bookmark.time;
           });
 
-          let isDragging = false;
-          let dragStartX;
-          let dragStartLeft;
-          let dragStartTime;
-
-          const startDragging = (e) => {
-            isDragging = true;
-            dragStartX = e.clientX;
-            dragStartLeft = parseFloat(iconContainer.style.left);
-            dragStartTime = bookmark.time; // Enregistrer le temps initial du marque-page
-            iconContainer.classList.add('dragging');
-            document.addEventListener('mousemove', dragBookmark);
-            document.addEventListener('mouseup', stopDragging);
-            e.preventDefault();
-          };
-
-          const dragBookmark = (e) => {
-            if (!isDragging) return;
-
-            const deltaX = e.clientX - dragStartX;
-            const newLeft = dragStartLeft + deltaX;
-
-            // Limiter le déplacement à l'intérieur de la barre de progression
-            const progressBarRect = state.progressBar.getBoundingClientRect();
-            const minLeft = 0;
-            const maxLeft = progressBarRect.width - iconContainer.offsetWidth;
-            const clampedLeft = Math.max(minLeft, Math.min(newLeft, maxLeft));
-
-            iconContainer.style.left = `${clampedLeft}px`;
-            console.log("Position actuelle de l'icône:", clampedLeft); // Log pour vérifier la position
-          };
-
-          const stopDragging = async (e) => {
-            isDragging = false;
-            iconContainer.classList.remove('dragging');
-            document.removeEventListener('mousemove', dragBookmark);
-            document.removeEventListener('mouseup', stopDragging);
-
-            const progressBarRect = state.progressBar.getBoundingClientRect();
-            const newLeft = parseFloat(iconContainer.style.left);
-            const newTime = (newLeft / progressBarRect.width) * state.currentVideo.duration;
-
-            console.log("Nouvelle position du marque-page:", newTime); // Log pour vérifier la nouvelle position
-
-            // Vérifier si la différence de temps est supérieure à 5 secondes
-            if (Math.abs(newTime - dragStartTime) > 5) {
-              // Mettre à jour le marque-page avec le nouveau temps
-              bookmark.time = newTime;
-              await bookmarkManager.handleBookmarkAction('updateBookmark', bookmark);
-            } else {
-              // Remettre l'icône à sa position initiale si la différence de temps est trop petite
-              iconContainer.style.left = `${(dragStartTime / state.currentVideo.duration) * progressBarRect.width}px`;
-            }
-          };
-
-          iconContainer.addEventListener('mousedown', startDragging);
-
           iconContainer.appendChild(icon);
           iconContainer.appendChild(infoContainer);
           state.player.appendChild(iconContainer);
@@ -682,7 +613,7 @@ const YouTubeBookmarker = (function () {
 
   let clickCount = 0;
   let lastClickTime = 0;
-  let lastVideoTime = 0; // Initialisation de lastVideoTime
+  let lastVideoTime = 0;
 
   function handleProgressBarClick(event) {
     const currentTime = new Date().getTime();
@@ -696,25 +627,28 @@ const YouTubeBookmarker = (function () {
 
     lastClickTime = currentTime;
 
-    const progressBarRect = state.progressBar.getBoundingClientRect();
-    const clickPosition = event.clientX - progressBarRect.left;
-    const clickRatio = clickPosition / progressBarRect.width;
-    lastVideoTime = clickRatio * state.currentVideo.duration; // Mise à jour de lastVideoTime
-    const currentUrl = window.location.href;
-
     if (clickCount === 2) {
       console.log("Double-clic détecté sur la barre de progression");
+
+      if (!state.progressBar || !state.currentVideo) {
+        console.warn("Barre de progression ou vidéo non disponible");
+        return;
+      }
+      const progressBarRect = state.progressBar.getBoundingClientRect();
+      const clickPosition = event.clientX - progressBarRect.left;
+      const clickRatio = clickPosition / progressBarRect.width;
+      lastVideoTime = clickRatio * state.currentVideo.duration;
       state.currentVideo.currentTime = lastVideoTime;
 
+      const currentUrl = window.location.href;
+      
       const bookmark = {
         time: lastVideoTime,
-        note: '',
-        url: currentUrl
+        url: currentUrl,
+        note: ''
       };
-
-      bookmarkManager.handleBookmarkAction();
-
       console.log("Temps de la vidéo mis à jour :", state.currentVideo.currentTime);
+      bookmarkManager.handleAddBookmark(bookmark);
     }
 
     if (clickCount === 3) {
@@ -723,8 +657,9 @@ const YouTubeBookmarker = (function () {
       chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
         if (!bookmarks) bookmarks = [];
 
+        const currentUrl = window.location.href;
         const existingBookmark = bookmarks.find(b =>
-          b.url === currentUrl && Math.abs(b.time - lastVideoTime) < 5
+          b.url === currentUrl && Math.abs(b.time - lastVideoTime) < 1
         );
 
         if (existingBookmark) {
@@ -734,13 +669,15 @@ const YouTubeBookmarker = (function () {
 
         const bookmark = {
           time: lastVideoTime,
-          note: '',
-          url: currentUrl
+          url: currentUrl,
+          note: '' // Marque-page sans note
         };
 
         bookmarkManager.handleBookmarkAction('addBookmark', bookmark);
         console.log("Marque-page ajouté à :", lastVideoTime);
       });
+
+      clickCount = 0; // Réinitialiser le compteur après le triple clic
     }
   }
 
@@ -927,18 +864,3 @@ window.addEventListener('popstate', () => {
     });
   }
 });
-
-chrome.runtime.onConnect.addListener(function(port) {
-  if (port.name === "contentScript") {
-    port.onDisconnect.addListener(function() {
-      console.error("Connexion perdue avec l'extension. Tentative de reconnexion...");
-      // Tentez de vous reconnecter ou de réinitialiser l'extension ici
-      setTimeout(initializeExtension, 1000);
-    });
-  }
-});
-
-if (!chrome.runtime) {
-  console.error("L'API chrome.runtime n'est pas disponible. Vérifiez la compatibilité du navigateur.");
-  // Gérez cette situation (par exemple, désactivez les fonctionnalités de l'extension)
-}

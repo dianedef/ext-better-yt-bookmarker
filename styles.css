@@ -141,9 +141,6 @@
 html, body {
    width: 800px;
    height: 600px;
-   margin: 0;/* Supprimez les marges par défaut */
-   padding: 0; /* Sup primez le remplissage par défaut */
-   overflow: hidden; /* Évitez le défilement si nécessaire */  
 }
 .bookmark-item {
    display: flex;
