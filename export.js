@@ -1,5 +1,5 @@
 // export.js
-function exportBookmarksAsMarkdown(bookmarks) {
+async function exportBookmarksAsMarkdown(bookmarks) {
     let markdown = '';
 
     bookmarks.forEach(video => {
@@ -10,17 +10,13 @@ function exportBookmarksAsMarkdown(bookmarks) {
         markdown += '\n'; // Ajoute une ligne vide entre les vidéos
     });
 
-    // Créer un blob et un lien pour télécharger le fichier Markdown
-    const blob = new Blob([markdown], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'bookmarks.md';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+        await navigator.clipboard.writeText(markdown);
+        alert('Le contenu Markdown a été copié dans le presse-papier !');
+    } catch (err) {
+        console.error('Erreur lors de la copie dans le presse-papier:', err);
+        alert('Impossible de copier dans le presse-papier. Veuillez vérifier les permissions de votre navigateur.');
+    }
 }
 
 function exportBookmarksAsJSON(bookmarks) {

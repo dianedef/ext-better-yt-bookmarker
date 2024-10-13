@@ -19,7 +19,8 @@ const YouTubeBookmarker = (function () {
     progressBar: null,
     bookmarkInputVisible: false,
     bookmarkInputContainer: null,
-    bookmarkInputElement: null
+    bookmarkInputElement: null,
+    isInitialized: false
   };
 
   // Fonction pour réinitialiser l'état
@@ -33,7 +34,8 @@ const YouTubeBookmarker = (function () {
       progressBar: null,
       bookmarkInputVisible: false,
       bookmarkInputContainer: null,
-      bookmarkInputElement: null
+      bookmarkInputElement: null,
+      isInitialized: false
     };
   }
 
@@ -86,7 +88,7 @@ const YouTubeBookmarker = (function () {
 
       setTimeout(() => {
         messageContainer.remove();
-      }, 30000); // Le message disparaît après 30 secondes
+      }, 3000); // Le message disparaît après 30 secondes
     }
   };
 
@@ -108,13 +110,17 @@ const YouTubeBookmarker = (function () {
         });
         if (response && response.success) {
           this.loadBookmarks();
+          utils.afficherMessage("Marque-page ajouté avec succès !", 'info');
         } else {
           console.error(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page:`, response);
           utils.afficherMessage(`Erreur lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page. Veuillez vérifier la console pour plus de détails.`, 'error');
         }
       } catch (error) {
-        console.error('Erreur lors de l\'envoi du message:', error);
-        utils.afficherMessage(`Une erreur est survenue lors de l'${action === 'addBookmark' ? 'ajout' : 'suppression'} du marque-page.`, 'error');
+        const errorAction = action === 'addBookmark' ? 'l\'ajout' :
+                            action === 'deleteBookmark' ? 'la suppression' : 'la mise à jour';
+        console.error(`Erreur lors de ${errorAction} du marque-page:`, error);
+        utils.afficherMessage(`Erreur de communication avec l'extension lors de ${errorAction} du marque-page. Veuillez réessayer.`, 'error');
+        throw error;
       }
     },
 
@@ -254,15 +260,14 @@ const YouTubeBookmarker = (function () {
 
     addDefaultBookmarks: function () {
       if (state.currentVideo) {
-        if (!this.defaultBookmarks) {
-          this.defaultBookmarks = [
-            { time: 0, note: 'Début de la vidéo' },
-            { time: state.currentVideo.duration, note: 'Fin de la vidéo' }
-          ];
-          console.log("Marque-pages par défaut ajoutés :", this.defaultBookmarks);
-        }
+        console.log("Vidéo trouvée, ajout des marque-pages par défaut");
+        this.defaultBookmarks = [
+          { time: 0, note: 'Début de la vidéo' },
+          { time: state.currentVideo.duration, note: 'Fin de la vidéo' }
+        ];
+        console.log("Marque-pages par défaut ajoutés :", this.defaultBookmarks);
       } else {
-        console.warn("Impossible d'ajouter les marque-pages par défaut : aucune vidéo trouvée.");
+        console.log("Impossible d'ajouter les marque-pages par défaut : aucune vidéo trouvée.");
       }
     },
 
@@ -352,7 +357,6 @@ const YouTubeBookmarker = (function () {
             console.error("Erreur lors de l'accès au stockage :", chrome.runtime.lastError);
             return;
           }
-          console.log("Bookmarks récupérés :", bookmarks);
           if (bookmarks && Array.isArray(bookmarks)) {
             const videoBookmarks = bookmarks.filter(b => b.url === window.location.href);
             console.log("Bookmarks pour cette vidéo :", videoBookmarks);
@@ -362,6 +366,8 @@ const YouTubeBookmarker = (function () {
               uiManager.addBookmarkIcon(bookmark);
             });
           }
+          // Appel de la fonction addDefaultBookmarks
+          bookmarkManager.addDefaultBookmarks();
         });
       } catch (error) {
         console.warn("Erreur lors du chargement des marque-pages:", error);
@@ -371,20 +377,20 @@ const YouTubeBookmarker = (function () {
     navigateBookmarks: function (direction) {
       chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
         if (!bookmarks) bookmarks = [];
-
+        console.log("Bookmarks récupérés pour navigation :", bookmarks);
         const currentTime = state.currentVideo.currentTime;
         const currentUrl = window.location.href;
         const videoBookmarks = bookmarks.filter(b => b.url === currentUrl);
-
-        // Combiner les marque-pages normaux et les marque-pages par défaut
         const allBookmarks = [...this.defaultBookmarks, ...videoBookmarks].sort((a, b) => a.time - b.time);
 
         if (direction === 'prev') {
           const prevBookmark = allBookmarks.reverse().find(b => b.time < currentTime);
           if (prevBookmark) state.currentVideo.currentTime = prevBookmark.time;
+          console.log(`Navigué vers le signet précédent : ${prevBookmark.note}`);
         } else if (direction === 'next') {
           const nextBookmark = allBookmarks.find(b => b.time > currentTime);
           if (nextBookmark) state.currentVideo.currentTime = nextBookmark.time;
+          console.log(`Navigué vers le signet suivant : ${nextBookmark.note}`);
         }
       });
     },
@@ -539,6 +545,63 @@ const YouTubeBookmarker = (function () {
             });
           });
 
+          let isDragging = false;
+          let dragStartX;
+          let dragStartLeft;
+          let dragStartTime;
+
+          const startDragging = (e) => {
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartLeft = parseFloat(iconContainer.style.left);
+            dragStartTime = bookmark.time; // Enregistrer le temps initial du marque-page
+            iconContainer.classList.add('dragging');
+            document.addEventListener('mousemove', dragBookmark);
+            document.addEventListener('mouseup', stopDragging);
+            e.preventDefault();
+          };
+
+          const dragBookmark = (e) => {
+            if (!isDragging) return;
+
+            const deltaX = e.clientX - dragStartX;
+            const newLeft = dragStartLeft + deltaX;
+
+            // Limiter le déplacement à l'intérieur de la barre de progression
+            const progressBarRect = state.progressBar.getBoundingClientRect();
+            const minLeft = 0;
+            const maxLeft = progressBarRect.width - iconContainer.offsetWidth;
+            const clampedLeft = Math.max(minLeft, Math.min(newLeft, maxLeft));
+
+            iconContainer.style.left = `${clampedLeft}px`;
+            console.log("Position actuelle de l'icône:", clampedLeft); // Log pour vérifier la position
+          };
+
+          const stopDragging = async (e) => {
+            isDragging = false;
+            iconContainer.classList.remove('dragging');
+            document.removeEventListener('mousemove', dragBookmark);
+            document.removeEventListener('mouseup', stopDragging);
+
+            const progressBarRect = state.progressBar.getBoundingClientRect();
+            const newLeft = parseFloat(iconContainer.style.left);
+            const newTime = (newLeft / progressBarRect.width) * state.currentVideo.duration;
+
+            console.log("Nouvelle position du marque-page:", newTime); // Log pour vérifier la nouvelle position
+
+            // Vérifier si la différence de temps est supérieure à 5 secondes
+            if (Math.abs(newTime - dragStartTime) > 5) {
+              // Mettre à jour le marque-page avec le nouveau temps
+              bookmark.time = newTime;
+              await bookmarkManager.handleBookmarkAction('updateBookmark', bookmark);
+            } else {
+              // Remettre l'icône à sa position initiale si la différence de temps est trop petite
+              iconContainer.style.left = `${(dragStartTime / state.currentVideo.duration) * progressBarRect.width}px`;
+            }
+          };
+
+          iconContainer.addEventListener('mousedown', startDragging);
+
           icon.addEventListener('click', () => {
             console.log("Clic sur l'icône de marque-page, navigation vers :", bookmark.time);
             state.currentVideo.currentTime = bookmark.time;
@@ -548,15 +611,6 @@ const YouTubeBookmarker = (function () {
           iconContainer.appendChild(infoContainer);
           state.player.appendChild(iconContainer);
           console.log("Icône ajoutée au DOM");
-
-          // Ajout d'un observateur de redimensionnement
-          const resizeObserver = new ResizeObserver(() => {
-            if (state.currentVideo && state.progressBar) {
-              const newPosition = (bookmark.time / state.currentVideo.duration) * state.progressBar.offsetWidth;
-              iconContainer.style.left = `${newPosition}px`;
-            }
-          });
-          resizeObserver.observe(state.player);
 
           // Nettoyage de l'observateur lors de la suppression de l'icône
           iconContainer.addEventListener('remove', () => resizeObserver.disconnect());
@@ -598,7 +652,22 @@ const YouTubeBookmarker = (function () {
       const checkPlayer = () => {
         state.player = document.querySelector('.html5-video-player');
         state.currentVideo = document.querySelector('video');
-        if (state.player && state.currentVideo && state.player.getBoundingClientRect().width > 0) {
+        state.progressBar = document.querySelector('.ytp-progress-bar');
+        if (state.player && state.currentVideo && state.progressBar && state.player.getBoundingClientRect().width > 0) {
+          const resizeObserver = new ResizeObserver(debounce(() => {
+            console.log("Taille du lecteur vidéo modifiée");
+            bookmarkManager.loadBookmarks();
+          }, 250));
+    
+          resizeObserver.observe(state.player);
+    
+          // Nettoyage de l'observateur lors de la réinitialisation de l'extension
+          const originalReinitializeExtension = YouTubeBookmarker.reinitializeExtension;
+          YouTubeBookmarker.reinitializeExtension = function() {
+            resizeObserver.disconnect();
+            originalReinitializeExtension();
+          };
+
           resolve();
         } else if (attempts >= maxAttempts) {
           reject(new Error("Impossible de trouver le lecteur YouTube après plusieurs tentatives."));
@@ -659,7 +728,7 @@ const YouTubeBookmarker = (function () {
 
         const currentUrl = window.location.href;
         const existingBookmark = bookmarks.find(b =>
-          b.url === currentUrl && Math.abs(b.time - lastVideoTime) < 1
+          b.url === currentUrl && Math.abs(b.time - lastVideoTime) < 5
         );
 
         if (existingBookmark) {
@@ -694,8 +763,17 @@ const YouTubeBookmarker = (function () {
       return;
     }
 
-    resetState();
-    utils.updateState();
+    // Vérifiez si l'état a déjà été initialisé
+    if (!state.isInitialized) {
+      console.log("Initialisation de l'état...");
+      resetState();
+      utils.updateState();
+      state.isInitialized = true;
+    } else {
+      console.log("L'état a déjà été initialisé. Mise à jour de l'état uniquement.");
+      utils.updateState();
+    }
+
     uiManager.addDynamicStyles();
     setupHotkeys();
 
@@ -703,21 +781,17 @@ const YouTubeBookmarker = (function () {
       .then(() => {
         console.log("Lecteur YouTube trouvé, initialisation en cours...");
         uiManager.addBookmarkButton();
+        bookmarkManager.loadBookmarks();
         if (state.currentVideo) {
           state.currentVideo.addEventListener('loadedmetadata', () => {
-            bookmarkManager.addDefaultBookmarks();
             bookmarkManager.loadBookmarks();
+            console.log("eventlistener loadedmetadata chargés");
           });
 
           state.currentVideo.addEventListener('play', handleVideoStateChange);
           state.currentVideo.addEventListener('pause', handleVideoStateChange);
-
-          // Remplacez l'écouteur de double-clic par un écouteur de clic
           state.progressBar.addEventListener('click', handleProgressBarClick);
-          console.log("Écouteur de clic ajouté à la barre de progression");
 
-          // Ajout d'un appel immédiat à loadBookmarks
-          bookmarkManager.loadBookmarks();
         } else {
           console.warn("Élément vidéo non trouvé après l'initialisation du lecteur.");
         }
@@ -725,7 +799,7 @@ const YouTubeBookmarker = (function () {
       .catch(error => {
         console.error("Erreur lors de l'initialisation:", error);
       });
-  };
+    };
 
   const checkAndResetState = function () {
     console.log("Vérification de l'état...");
@@ -735,7 +809,6 @@ const YouTubeBookmarker = (function () {
         resetState();
         utils.updateState();
       }
-      bookmarkManager.addDefaultBookmarks();
       bookmarkManager.loadBookmarks();
       resolve();
     });
@@ -746,6 +819,7 @@ const YouTubeBookmarker = (function () {
     checkAndResetState().catch(error => {
       console.warn("Erreur lors de la vérification/réinitialisation de l'état:", error);
     });
+    bookmarkManager.loadBookmarks();
   };
 
   const setupHotkeys = function () {
@@ -864,3 +938,30 @@ window.addEventListener('popstate', () => {
     });
   }
 });
+
+chrome.runtime.onConnect.addListener(function(port) {
+  if (port.name === "contentScript") {
+    port.onDisconnect.addListener(function() {
+      console.error("Connexion perdue avec l'extension. Tentative de reconnexion...");
+      // Tentez de vous reconnecter ou de réinitialiser l'extension ici
+      setTimeout(initializeExtension, 1000);
+    });
+  }
+});
+
+if (!chrome.runtime) {
+  console.error("L'API chrome.runtime n'est pas disponible. Vérifiez la compatibilité du navigateur.");
+  // Gérez cette situation (par exemple, désactivez les fonctionnalités de l'extension)
+}
+
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
