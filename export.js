@@ -1,21 +1,45 @@
-// export.js
+import { BMBackground } from './background.js';
+
 async function exportBookmarksAsMarkdown(bookmarks) {
+    if (!bookmarks || bookmarks.length === 0) {
+        BMBackground.afficherMessage('Aucun marque-page à exporter.', 'warning');
+        return;
+    }
+
+    // Grouper les signets par URL de vidéo
+    const groupedBookmarks = bookmarks.reduce((acc, bookmark) => {
+        if (!acc[bookmark.url]) {
+            acc[bookmark.url] = {
+                title: bookmark.title,
+                url: bookmark.url,
+                notes: []
+            };
+        }
+        acc[bookmark.url].notes.push({
+            timestamp: bookmark.timestamp,
+            content: bookmark.content
+        });
+        return acc;
+    }, {});
+
     let markdown = '';
 
-    bookmarks.forEach(video => {
+    Object.values(groupedBookmarks).forEach(video => {
         markdown += `## ${video.title}\n[${video.url}](${video.url})\n\n`;
-        video.notes.forEach(note => {
-            markdown += `[${note.timestamp}][${note.url}]: ${note.content}\n`;
-        });
+        if (video.notes && video.notes.length > 0) {
+            video.notes.forEach(note => {
+                markdown += `[${note.timestamp}](${video.url}&t=${note.timestamp}): ${note.content}\n`;
+            });
+        }
         markdown += '\n'; // Ajoute une ligne vide entre les vidéos
     });
 
     try {
         await navigator.clipboard.writeText(markdown);
-        alert('Le contenu Markdown a été copié dans le presse-papier !');
+        BMBackground.afficherMessage('Le contenu Markdown a été copié dans le presse-papier !', 'success');
     } catch (err) {
         console.error('Erreur lors de la copie dans le presse-papier:', err);
-        alert('Impossible de copier dans le presse-papier. Veuillez vérifier les permissions de votre navigateur.');
+        BMBackground.afficherMessage('Impossible de copier dans le presse-papier. Veuillez vérifier les permissions de votre navigateur.', 'error');
     }
 }
 
