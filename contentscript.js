@@ -13,6 +13,14 @@ const YouTubeBookmarker = {
     wasPlayingBeforeBookmark: false
   },
 
+  get currentVideoTime() {
+    return this.state.currentVideo ? this.state.currentVideo.currentTime : 0;
+  },
+
+  get currentUrl() {
+    return window.location.href;
+  },
+
   CONSTANTS: {
     BOOKMARK_BUTTON_ID: 'bookmark-button',
     BOOKMARK_ICON_CLASS: 'custom-bookmark-icon',
@@ -24,17 +32,6 @@ const YouTubeBookmarker = {
   init() {
     this.setupEventListeners();
     this.loadBookmarks();
-  },
-
-
-  updateState: function () {
-    console.log("Mise à jour de l'état");
-    this.state.player = document.querySelector('.html5-video-player');
-    this.state.bookmarkButton = document.getElementById(this.CONSTANTS.BOOKMARK_BUTTON_ID);
-    this.state.currentVideo = document.querySelector('video');
-    this.state.timeDisplay = document.querySelector('.ytp-time-display');
-    this.state.progressBar = this.state.player ? this.state.player.querySelector('.ytp-progress-bar') : null;
-    console.log("État mis à jour :", this.state);
   },
 
   setupEventListeners() {
@@ -69,9 +66,10 @@ const YouTubeBookmarker = {
           Object.entries(hotkeys).forEach(([action, hotkey]) => {
             if (pressedHotkey === hotkey) {
               e.preventDefault();
+              e.stopPropagation();
               switch (action) {
                 case 'add-bookmark':
-                  this.handleAddBookmark();
+                  this.handleAddBookmark(e);
                   break;
                 case 'prev-bookmark':
                   this.navigateBookmarks('prev');
@@ -127,6 +125,16 @@ const YouTubeBookmarker = {
     };
   },
 
+  updateState: function () {
+    console.log("Mise à jour de l'état");
+    this.state.player = document.querySelector('.html5-video-player');
+    this.state.bookmarkButton = document.getElementById(this.CONSTANTS.BOOKMARK_BUTTON_ID);
+    this.state.currentVideo = document.querySelector('video');
+    this.state.timeDisplay = document.querySelector('.ytp-time-display');
+    this.state.progressBar = this.state.player ? this.state.player.querySelector('.ytp-progress-bar') : null;
+    console.log("État mis à jour :", this.state);
+  },
+
   addBookmarkButton() {
     const controls = document.querySelector('.ytp-time-display');
     if (controls && !this.state.bookmarkButton) {
@@ -151,17 +159,27 @@ const YouTubeBookmarker = {
       button.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.handleAddBookmark();
+        this.handleAddBookmark(e);
       });
 
       console.log("Bouton de marque-page ajouté avec succès après l'affichage du temps.");
     }
   },
 
-  async handleAddBookmark() {
+  async handleAddBookmark(event) {
+    const isClick = event instanceof MouseEvent;
+    const isHotkey = event instanceof KeyboardEvent;
+    if (isClick) {
+      this.state.bookmarkInputVisible = true;
+    } else if (isHotkey) {
+      this.state.bookmarkInputVisible = false;
+    }
+
+    this.state.currentVideo.pause()? this.state.wasPlayingBeforeBookmark = false : this.state.wasPlayingBeforeBookmark = true;
     if (this.state.bookmarkInputVisible && this.state.bookmarkInputContainer) {
       const note = this.state.bookmarkInputElement ? this.state.bookmarkInputElement.value : '';
       await this.saveBookmark(note);
+      this.closeBookmarkInput();
     } else {
       await this.addBookmark();
     }
@@ -169,102 +187,95 @@ const YouTubeBookmarker = {
 
   async addBookmark() {
     if (!this.state.currentVideo) {
-      afMessage("Impossible d'ajouter un marque-page : aucune vidéo en cours de lecture.", 'error');
+      console.error("Aucune vidéo en cours de lecture.");
       return;
     }
 
-    if (!this.state.player) {
-      console.error("Conteneur du lecteur non trouvé");
-      return;
-    }
+    if (!this.state.bookmarkInputContainer) {
+      const inputContainer = document.createElement('div');
+      inputContainer.className = this.CONSTANTS.BOOKMARK_INPUT_CONTAINER_CLASS;
+      const positionRatio = this.currentVideoTime / this.state.currentVideo.duration;
+      let leftPosition = positionRatio * 100;
+      const containerWidth = 240;
+      const playerWidth = this.state.player.offsetWidth;
+      const minPosition = (containerWidth / 2 / playerWidth) * 100;
+      const maxPosition = 100 - minPosition;
 
-    this.state.currentVideo.pause();
+      leftPosition = Math.max(minPosition, Math.min(leftPosition, maxPosition));
+      inputContainer.style.left = `${leftPosition}%`;
 
-    const inputContainer = document.createElement('div');
-    inputContainer.className = this.CONSTANTS.BOOKMARK_INPUT_CONTAINER_CLASS;
+      const noteInput = document.createElement('input');
+      noteInput.type = 'text';
+      noteInput.className = 'bookmark-input';
+      noteInput.placeholder = 'Ajouter une note pour ce marque-page';
 
-    const positionRatio = this.state.currentVideo.currentTime / this.state.currentVideo.duration;
-    let leftPosition = positionRatio * 100;
-
-    const containerWidth = 240;
-    const playerWidth = this.state.player.offsetWidth;
-    const minPosition = (containerWidth / 2 / playerWidth) * 100;
-    const maxPosition = 100 - minPosition;
-
-    leftPosition = Math.max(minPosition, Math.min(leftPosition, maxPosition));
-    inputContainer.style.left = `${leftPosition}%`;
-
-    const noteInput = document.createElement('input');
-    noteInput.type = 'text';
-    noteInput.className = 'bookmark-input';
-    noteInput.placeholder = 'Ajouter une note pour ce marque-page';
-
-    inputContainer.appendChild(noteInput);
-
-    const { showBookmarkButtons } = await new Promise(resolve =>
-      chrome.storage.sync.get({ showBookmarkButtons: false }, resolve)
-    );
-
-    if (showBookmarkButtons) {
-      const addButton = document.createElement('button');
-      addButton.textContent = '+';
-      addButton.style.marginRight = '5px';
-
-      const cancelButton = document.createElement('button');
-      cancelButton.textContent = 'x';
-
-      inputContainer.append(addButton, cancelButton);
-
-      addButton.addEventListener('click', () => this.saveBookmark(noteInput.value));
-      cancelButton.addEventListener('click', () => this.closeBookmarkInput());
-    }
-
-    const closeInput = () => {
-      this.closeBookmarkInput();
-      document.removeEventListener('click', handleOutsideClick);
-    };
-
-
-    const handleOutsideClick = (e) => {
-      if (!inputContainer.contains(e.target) && e.target !== this.state.bookmarkButton) {
-        closeInput();
-      }
-    };
-
-    noteInput.addEventListener('keydown', e => {
-      e.stopPropagation();
-      if (e.key === 'Escape') closeInput();
-      if (e.key === 'Enter') this.saveBookmark(noteInput.value);
-    });
-
-
-    inputContainer.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
-
-    document.addEventListener('click', handleOutsideClick);
-
-    if (this.state.player) {
-      this.state.player.appendChild(inputContainer);
+      inputContainer.appendChild(noteInput);
       this.state.bookmarkInputContainer = inputContainer;
-      this.state.bookmarkInputElement = noteInput;
-      this.state.bookmarkInputVisible = true;
-      noteInput.focus();
-    } else {
-      console.error("Conteneur du lecteur non trouvé");
+
+      const { showBookmarkButtons } = await new Promise(resolve =>
+        chrome.storage.sync.get({ showBookmarkButtons: false }, resolve)
+      );
+
+      if (showBookmarkButtons) {
+        const addButton = document.createElement('button');
+        addButton.textContent = '+';
+        addButton.style.marginRight = '5px';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'x';
+
+        inputContainer.append(addButton, cancelButton);
+
+        addButton.onclick = () => {
+          this.saveBookmark(noteInput.value);
+          this.closeBookmarkInput();
+        };
+        cancelButton.onclick = () => this.closeBookmarkInput();
+      }
+
+      if (this.state.player) {
+        this.state.player.appendChild(inputContainer);
+        this.state.bookmarkInputContainer = inputContainer;
+        this.state.bookmarkInputElement = noteInput;
+        noteInput.focus();
+      } else {
+        console.error("Conteneur du lecteur non trouvé");
+      }
+
+      const handleOutsideClick = (e) => {
+        if (!inputContainer.contains(e.target) && e.target !== this.state.bookmarkButton) {
+          this.closeBookmarkInput();
+          document.removeEventListener('click', handleOutsideClick);
+        }
+      };
+
+      document.addEventListener('click', handleOutsideClick);
+      inputContainer.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+
+      noteInput.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Escape') {
+          console.log("Échap pressé, fermeture du conteneur d'input");
+          this.closeBookmarkInput();
+        }
+        if (e.key === 'Enter') {
+          console.log("Entrée pressée, ajout du marque-page");
+          this.saveBookmark(noteInput.value);
+          this.closeBookmarkInput();
+        }
+      });
     }
   },
 
   async saveBookmark(note) {
-    const currentTime = this.state.currentVideo ? this.state.currentVideo.currentTime : 0;
-    const url = window.location.href;
     const bookmark = {
-      time: currentTime,
-      url: url,
+      time: this.currentVideoTime,
+      url: this.currentUrl,
       note: note
     };
 
-    this.closeBookmarkInput();
     try {
       const response = await chrome.runtime.sendMessage({ action: 'addBookmark', bookmark });
       if (response.success) {
@@ -277,25 +288,31 @@ const YouTubeBookmarker = {
       this.affMessage(`Erreur de communication avec l'extension : ${error}`, 'error');
     }
   },
-
+  
   closeBookmarkInput() {
     if (this.state.bookmarkInputContainer) {
       this.state.bookmarkInputContainer.remove();
       this.state.bookmarkInputContainer = null;
       this.state.bookmarkInputElement = null;
+      console.log("Fermeture du conteneur d'input");
+    } else {
+      console.warn("bookmarkInputContainer est déjà null, impossible de le supprimer.");
     }
-    this.state.bookmarkInputVisible = false;
+
+    if (this.state.bookmarkInputElement) {
+      this.state.bookmarkInputElement = null;
+      this.state.bookmarkInputVisible = false;
+      console.log("bookmarkInputVisible mis à false");
+    }
 
     if (this.state.currentVideo && this.state.wasPlayingBeforeBookmark) {
       this.state.currentVideo.play();
     }
-
-    this.state.wasPlayingBeforeBookmark = false;
   },
 
   async loadBookmarks() {
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'getBookmarksByUrl', url: window.location.href });
+      const response = await chrome.runtime.sendMessage({ action: 'getBookmarksByUrl', url: this.currentUrl }); // Utilisation du getter pour l'URL
       if (response.bookmarks) {
         this.displayBookmarks(response.bookmarks);
       } else {
@@ -342,25 +359,19 @@ const YouTubeBookmarker = {
     }
 
     deleteIcon.addEventListener('click', (e) => {
-      e.stopPropagation();
       this.deleteBookmark(bookmark);
     });
 
     icon.addEventListener('mouseenter', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
       infoContainer.style.display = 'block';
+      icon.addEventListener('pointerdown', (e) => {
+        if (e.button === 1) {
+          this.deleteBookmark(bookmark);
+        }
+      });
     });
 
-    icon.addEventListener('pointerdown', (e) => { // Ajout de cet événement
-      e.preventDefault(); // Empêche l'interaction avec l'interface de YouTube
-      e.stopPropagation(); // Empêche la propagation de l'événement
-      if (e.button === 1) {
-        this.deleteBookmark(bookmark);
-      }
-    });
-
-    icon.addEventListener('mouseleave', (e) => {
+    icon.addEventListener('mouseleave', () => {
       chrome.storage.sync.get('hideNotesByDefault', ({ hideNotesByDefault }) => {
         if (hideNotesByDefault) {
           infoContainer.style.display = 'none';
@@ -368,15 +379,8 @@ const YouTubeBookmarker = {
       });
     });
     
-    infoContainer.addEventListener('mouseenter', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    infoContainer.addEventListener('mouseenter', () => {
       infoContainer.style.display = 'block';
-    });
-
-    infoContainer.addEventListener('pointerdown', (e) => { // Ajout de cet événement
-      e.preventDefault(); // Empêche l'interaction avec l'interface de YouTube
-      e.stopPropagation(); // Empêche la propagation de l'événement
     });
 
     infoContainer.addEventListener('mouseleave', () => {
@@ -440,7 +444,7 @@ const YouTubeBookmarker = {
     iconContainer.addEventListener('mousedown', startDragging);
 
     icon.addEventListener('click', () => {
-      this.state.currentVideo.currentTime = bookmark.time;
+      this.currentVideoTime = bookmark.time;
     });
 
     iconContainer.appendChild(icon);
@@ -466,17 +470,15 @@ const YouTubeBookmarker = {
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getBookmarksByUrl', url: window.location.href });
       if (response.bookmarks) {
-        const currentTime = this.state.currentVideo.currentTime;
-        const allBookmarks = [...this.defaultBookmarks, ...videoBookmarks].sort((a, b) => a.time - b.
-        time);
+        const allBookmarks = [...this.defaultBookmarks, ...response.bookmarks].sort((a, b) => a.time - b.time);
     
         if (direction === 'prev') {
-          const prevBookmark = allBookmarks.reverse().find(b => b.time < currentTime);
-          if (prevBookmark) state.currentVideo.currentTime = prevBookmark.time;
+          const prevBookmark = allBookmarks.reverse().find(b => b.time < this.currentVideoTime);
+          if (prevBookmark) this.currentVideoTime = prevBookmark.time;
           console.log(`Navigué vers le signet précédent : ${prevBookmark.note}`);
         } else if (direction === 'next') {
-          const nextBookmark = allBookmarks.find(b => b.time > currentTime);
-          if (nextBookmark) state.currentVideo.currentTime = nextBookmark.time;
+          const nextBookmark = allBookmarks.find(b => b.time > this.currentVideoTime);
+          if (nextBookmark) this.currentVideoTime = nextBookmark.time;
           console.log(`Navigué vers le signet suivant : ${nextBookmark.note}`);
         }
       }
@@ -485,9 +487,6 @@ const YouTubeBookmarker = {
     }
   },
 }
-
-
-  // Utiliser l'API History au lieu de MutationObserver pour une meilleure performance
   let lastUrl = location.href;
   window.addEventListener('yt-navigate-finish', () => {
     console.log("Événement yt-navigate-finish déclenché");
@@ -502,15 +501,13 @@ const YouTubeBookmarker = {
     }
   });
 
-  // Initialisation au chargement de la page
-  if (window.location.href.includes('youtube.com/watch')) {
+  if (YouTubeBookmarker.currentUrl.includes('youtube.com/watch')) {
     YouTubeBookmarker.init();
   }
 
-
   window.addEventListener('popstate', () => {
     console.log("Événement popstate détecté");
-    if (window.location.href.includes('youtube.com/watch')) {
+    if (YouTubeBookmarker.currentUrl.includes('youtube.com/watch')) {
       YouTubeBookmarker.checkAndResetState().then(() => {
         YouTubeBookmarker.updateState();
         YouTubeBookmarker.loadBookmarks();
@@ -530,17 +527,4 @@ const YouTubeBookmarker = {
 
   if (!chrome.runtime) {
     console.error("L'API chrome.runtime n'est pas disponible. Vérifiez la compatibilité du navigateur.");
-    // Gérez cette situation (par exemple, désactivez les fonctionnalités de l'extension)
-  }
-
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
   }
