@@ -1,21 +1,20 @@
 const BMBackground = {
   bookmarks: [],
-  defaultBookmarks: [], // Ajout de la propriété defaultBookmarks
+  defaultBookmarks: [],
 
   async initializeBookmarks() {
     try {
       await chrome.storage.sync.set({ bookmarks: [] });
-      this.addDefaultBookmarks(); // Appel de la fonction pour ajouter les marque-pages par défaut
+      this.addDefaultBookmarks();
     } catch (error) {
       console.error("Erreur lors de l'initialisation des marque-pages:", error);
     }
   },
 
   addDefaultBookmarks: function () {
-    // Initialiser defaultBookmarks comme un tableau vide si ce n'est pas déjà fait
     this.defaultBookmarks = this.defaultBookmarks || [];
 
-    if (this.bookmarks.length > 0) { // Vérifiez si des marque-pages existent
+    if (this.bookmarks.length > 0) {
       console.log("Vidéo trouvée, ajout des marque-pages par défaut");
       this.defaultBookmarks = [
         { time: 0, note: 'Début de la vidéo' },

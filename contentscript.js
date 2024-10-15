@@ -6,11 +6,11 @@ const YouTubeBookmarker = {
     bookmarkButton: null,
     timeDisplay: null,
     progressBar: null,
-    bookmarkInputVisible: false,
+    bookmarkContainerVisible: false,
     bookmarkInputContainer: null,
     bookmarkInputElement: null,
     isInitialized: false,
-    wasPlayingBeforeBookmark: false
+    wasPlayingBeforeBookmark: true
   },
 
   get currentVideoTime() {
@@ -30,8 +30,10 @@ const YouTubeBookmarker = {
   },
 
   init() {
+    this.resetState();
     this.setupEventListeners();
     this.loadBookmarks();
+    this.addBookmarkButton();
   },
 
   setupEventListeners() {
@@ -96,20 +98,37 @@ const YouTubeBookmarker = {
   },
 
   async onNavigate() {
+    console.log("Événement yt-navigate-finish déclenché dans onNavigate");
+    if (window.location.pathname === '/watch' && this.currentUrl.includes('youtube.com/watch')) {
+      let lastUrl = this.currentUrl;
+      if (lastUrl !== this.currentUrl && this.currentUrl.includes('youtube.com/watch')) {
+        console.log("Nouvelle URL détectée :", this.currentUrl);
+        console.log("Réinitialisation de l'extension pour la nouvelle vidéo");
+        await this.resetState();
+        this.addBookmarkButton();
+        this.loadBookmarks();
+        if (url !== lastUrl) {
+        this.init();
+        }
+      }
+    }
+  },
+/*  
+window.addEventListener('popstate', () => {
+console.log("Événement popstate détecté");
+if (YouTubeBookmarker.currentUrl.includes('youtube.com/watch')) {
+  YouTubeBookmarker.checkAndResetState().then(() => {
+    YouTubeBookmarker.updateState();
+    YouTubeBookmarker.loadBookmarks();
+if (YouTubeBookmarker.currentUrl.includes('youtube.com/watch')) {
+YouTubeBookmarker.init();
+ async onPopState() {
     if (window.location.pathname === '/watch') {
       await this.resetState();
-      this.addBookmarkButton();
       this.loadBookmarks();
     }
   },
-
-  async onPopState() {
-    if (window.location.pathname === '/watch') {
-      await this.resetState();
-      this.loadBookmarks();
-    }
-  },
-
+ */
   async resetState() {
     this.state = {
       currentVideo: document.querySelector('video'),
@@ -121,7 +140,7 @@ const YouTubeBookmarker = {
       bookmarkInputContainer: null,
       bookmarkInputElement: null,
       isInitialized: true,
-      wasPlayingBeforeBookmark: false
+      wasPlayingBeforeBookmark: true
     };
   },
 
@@ -167,16 +186,18 @@ const YouTubeBookmarker = {
   },
 
   async handleAddBookmark(event) {
+    console.log("avant le handleAddBookmark");
+    console.log(this.state.bookmarkInputContainer);
+    this.state.currentVideo.pause()? this.state.wasPlayingBeforeBookmark = false : this.state.wasPlayingBeforeBookmark = true;
+    this.state.currentVideo.pause()
     const isClick = event instanceof MouseEvent;
     const isHotkey = event instanceof KeyboardEvent;
     if (isClick) {
-      this.state.bookmarkInputVisible = true;
+      this.state.bookmarkContainerVisible = true;
     } else if (isHotkey) {
-      this.state.bookmarkInputVisible = false;
+      this.state.bookmarkContainerVisible = false;
     }
-
-    this.state.currentVideo.pause()? this.state.wasPlayingBeforeBookmark = false : this.state.wasPlayingBeforeBookmark = true;
-    if (this.state.bookmarkInputVisible && this.state.bookmarkInputContainer) {
+    if (this.state.bookmarkContainerVisible && this.state.bookmarkInputContainer) {
       const note = this.state.bookmarkInputElement ? this.state.bookmarkInputElement.value : '';
       await this.saveBookmark(note);
       this.closeBookmarkInput();
@@ -212,6 +233,9 @@ const YouTubeBookmarker = {
       inputContainer.appendChild(noteInput);
       this.state.bookmarkInputContainer = inputContainer;
 
+      console.log("après l'ajout du conteneur d'input");
+      console.log(this.state.bookmarkInputContainer);
+
       const { showBookmarkButtons } = await new Promise(resolve =>
         chrome.storage.sync.get({ showBookmarkButtons: false }, resolve)
       );
@@ -241,19 +265,28 @@ const YouTubeBookmarker = {
       } else {
         console.error("Conteneur du lecteur non trouvé");
       }
-
+      
       const handleOutsideClick = (e) => {
         if (!inputContainer.contains(e.target) && e.target !== this.state.bookmarkButton) {
+          document.addEventListener('click', handleOutsideClick);
           this.closeBookmarkInput();
+          const videoPlayer = document.getElementById('container');
+          console.log(videoPlayer);
+          if (videoPlayer) {  
+            videoPlayer.addEventListener('click', (e) => {
+              e.preventDefault();
+            });
           document.removeEventListener('click', handleOutsideClick);
+          }
         }
+        console.log("click, fermeture du conteneur d'input");
+        console.log(this.state.bookmarkInputContainer);
       };
 
-      document.addEventListener('click', handleOutsideClick);
       inputContainer.addEventListener('click', (e) => {
         e.stopPropagation();
+        e.preventDefault();
       });
-
       noteInput.addEventListener('keydown', e => {
         e.stopPropagation();
         if (e.key === 'Escape') {
@@ -290,31 +323,37 @@ const YouTubeBookmarker = {
   },
   
   closeBookmarkInput() {
+    console.log("avant la Fermeture du conteneur d'input");
+    console.log(this.state.bookmarkInputContainer);
     if (this.state.bookmarkInputContainer) {
       this.state.bookmarkInputContainer.remove();
       this.state.bookmarkInputContainer = null;
       this.state.bookmarkInputElement = null;
+      this.state.bookmarkContainerVisible = false;
       console.log("Fermeture du conteneur d'input");
+      console.log(this.state.bookmarkInputContainer);
+      console.log(JSON.stringify(this.state.bookmarkInputContainer));
     } else {
       console.warn("bookmarkInputContainer est déjà null, impossible de le supprimer.");
+      console.log(this.state.bookmarkInputContainer);
+      console.log(JSON.stringify(this.state.bookmarkInputContainer));
     }
-
     if (this.state.bookmarkInputElement) {
       this.state.bookmarkInputElement = null;
-      this.state.bookmarkInputVisible = false;
-      console.log("bookmarkInputVisible mis à false");
+      this.state.bookmarkContainerVisible = false;
+      console.log("bookmarkContainerVisible mis à false");
     }
-
-    if (this.state.currentVideo && this.state.wasPlayingBeforeBookmark) {
-      this.state.currentVideo.play();
-    }
+    this.state.wasPlayingBeforeBookmark ? this.state.currentVideo.play() : null;
+    return;
   },
 
   async loadBookmarks() {
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'getBookmarksByUrl', url: this.currentUrl }); // Utilisation du getter pour l'URL
+      const response = await chrome.runtime.sendMessage({ action: 'getBookmarks', url: this.currentUrl });
       if (response.bookmarks) {
         this.displayBookmarks(response.bookmarks);
+        console.log("après le displayBookmarkks");
+        console.log(response.bookmarks);
       } else {
         console.error("Erreur lors du chargement des marque-pages:", response.error);
       }
@@ -468,7 +507,7 @@ const YouTubeBookmarker = {
 
   async navigateBookmarks(direction) {
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'getBookmarksByUrl', url: window.location.href });
+      const response = await chrome.runtime.sendMessage({ action: 'getBookmarks', url: window.location.href });
       if (response.bookmarks) {
         const allBookmarks = [...this.defaultBookmarks, ...response.bookmarks].sort((a, b) => a.time - b.time);
     
@@ -487,44 +526,19 @@ const YouTubeBookmarker = {
     }
   },
 }
-  let lastUrl = location.href;
-  window.addEventListener('yt-navigate-finish', () => {
-    console.log("Événement yt-navigate-finish déclenché");
-    const url = location.href;
-    if (url !== lastUrl) {
-      console.log("Nouvelle URL détectée :", url);
-      lastUrl = url;
-      if (url.includes('youtube.com/watch')) {
-        console.log("Réinitialisation de l'extension pour la nouvelle vidéo");
-        YouTubeBookmarker.init();
-      }
-    }
+
+YouTubeBookmarker.init()
+
+chrome.runtime.onConnect.addListener(function(port) {
+if (port.name === "contentScript") {
+  port.onDisconnect.addListener(function() {
+    console.error("Connexion perdue avec l'extension. Tentative de reconnexion...");
+    setTimeout(initializeExtension, 1000);
   });
+}
+});
 
-  if (YouTubeBookmarker.currentUrl.includes('youtube.com/watch')) {
-    YouTubeBookmarker.init();
-  }
+if (!chrome.runtime) {
+console.error("L'API chrome.runtime n'est pas disponible. Vérifiez la compatibilité du navigateur.");
+}
 
-  window.addEventListener('popstate', () => {
-    console.log("Événement popstate détecté");
-    if (YouTubeBookmarker.currentUrl.includes('youtube.com/watch')) {
-      YouTubeBookmarker.checkAndResetState().then(() => {
-        YouTubeBookmarker.updateState();
-        YouTubeBookmarker.loadBookmarks();
-      });
-    }
-  });
-
-  chrome.runtime.onConnect.addListener(function(port) {
-    if (port.name === "contentScript") {
-      port.onDisconnect.addListener(function() {
-        console.error("Connexion perdue avec l'extension. Tentative de reconnexion...");
-        // Tentez de vous reconnecter ou de réinitialiser l'extension ici
-        setTimeout(initializeExtension, 1000);
-      });
-    }
-  });
-
-  if (!chrome.runtime) {
-    console.error("L'API chrome.runtime n'est pas disponible. Vérifiez la compatibilité du navigateur.");
-  }
