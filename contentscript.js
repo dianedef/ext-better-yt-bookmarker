@@ -3,6 +3,8 @@ const YouTubeBookmarker = {
   state: {
     currentVideo: null,
     player: null,
+    bookmarks: [],
+    groupedBookmarks: {},
     bookmarkButton: null,
     timeDisplay: null,
     progressBar: null,
@@ -29,11 +31,12 @@ const YouTubeBookmarker = {
     BOOKMARK_INPUT_CONTAINER_CLASS: 'bookmark-input-container'
   },
 
-  init() {
-    this.resetState();
-    this.setupEventListeners();
-    this.loadBookmarks();
+  
+  async init() {
+    await this.resetState();
+    await this.loadBookmarks();
     this.addBookmarkButton();
+    this.setupEventListeners();
   },
 
   setupEventListeners() {
@@ -55,7 +58,7 @@ const YouTubeBookmarker = {
   },
 
   setupHotkeys() {
-    chrome.storage.sync.get('hotkeys', ({ hotkeys }) => {
+    chrome.storage.local.get('hotkeys', ({ hotkeys }) => {
     if (hotkeys) {
       document.addEventListener('keydown', (e) => {
         const pressedHotkey = [
@@ -92,7 +95,6 @@ const YouTubeBookmarker = {
       }
   })
   },
-  
 
   toggleNotesVisibility() {
   },
@@ -130,19 +132,28 @@ YouTubeBookmarker.init();
   },
  */
   async resetState() {
+    const storedBookmarks = await chrome.storage.local.get('bookmarks');
+    const storedGroupedBookmarks = await chrome.storage.local.get('groupedBookmarks');
+    
     this.state = {
       currentVideo: document.querySelector('video'),
-      player: document.querySelector('.html5-video-player'),
-      bookmarkButton: document.getElementById(this.CONSTANTS.BOOKMARK_BUTTON_ID),
-      timeDisplay: document.querySelector('.ytp-time-display'),
-      progressBar: document.querySelector('.ytp-progress-bar'),
-      bookmarkInputVisible: false,
-      bookmarkInputContainer: null,
-      bookmarkInputElement: null,
-      isInitialized: true,
-      wasPlayingBeforeBookmark: true
-    };
-  },
+        player: document.querySelector('.html5-video-player'),
+        bookmarkButton: document.getElementById(this.CONSTANTS.BOOKMARK_BUTTON_ID),
+        timeDisplay: document.querySelector('.ytp-time-display'),
+        progressBar: document.querySelector('.ytp-progress-bar'),
+        bookmarkInputVisible: false,
+        bookmarkInputContainer: null,
+        bookmarkInputElement: null,
+        isInitialized: true,
+        wasPlayingBeforeBookmark: true,
+        bookmarks: storedBookmarks.bookmarks || [],
+        groupedBookmarks: storedGroupedBookmarks.groupedBookmarks || {}
+      };
+      console.log("resetstate() storedGroupedBookmarks.groupedBookmarks", storedGroupedBookmarks.groupedBookmarks);
+      console.log("resetstate() storedBookmarks.bookmarks", storedBookmarks.bookmarks);
+      console.log("resetstate() storedGroupedBookmarks", storedGroupedBookmarks);
+      console.log("resetstate() storedBookmarks", storedBookmarks);
+    },
 
   updateState: function () {
     console.log("Mise à jour de l'état");
@@ -154,9 +165,9 @@ YouTubeBookmarker.init();
     console.log("État mis à jour :", this.state);
   },
 
-  addBookmarkButton() {
-    const controls = document.querySelector('.ytp-time-display');
-    if (controls && !this.state.bookmarkButton) {
+  async addBookmarkButton() {
+    const player = await this.waitForYouTubePlayer();
+    if (player && !this.state.bookmarkButton) {
       const button = document.createElement('button');
       button.id = this.CONSTANTS.BOOKMARK_BUTTON_ID;
       
@@ -181,13 +192,25 @@ YouTubeBookmarker.init();
         this.handleAddBookmark(e);
       });
 
-      console.log("Bouton de marque-page ajouté avec succès après l'affichage du temps.");
+      console.log("Bouton de marque-page ajouté avec succès.");
+    } else {
+      console.error("Le conteneur des contrôles est introuvable.");
     }
   },
 
+  waitForYouTubePlayer() {
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        const player = document.querySelector('.html5-video-player');
+        if (player) {
+          clearInterval(interval);
+          resolve(player);
+        }
+      }, 100);
+    });
+  },
+
   async handleAddBookmark(event) {
-    console.log("avant le handleAddBookmark");
-    console.log(this.state.bookmarkInputContainer);
     this.state.currentVideo.pause()? this.state.wasPlayingBeforeBookmark = false : this.state.wasPlayingBeforeBookmark = true;
     this.state.currentVideo.pause()
     const isClick = event instanceof MouseEvent;
@@ -207,11 +230,6 @@ YouTubeBookmarker.init();
   },
 
   async addBookmark() {
-    if (!this.state.currentVideo) {
-      console.error("Aucune vidéo en cours de lecture.");
-      return;
-    }
-
     if (!this.state.bookmarkInputContainer) {
       const inputContainer = document.createElement('div');
       inputContainer.className = this.CONSTANTS.BOOKMARK_INPUT_CONTAINER_CLASS;
@@ -233,11 +251,8 @@ YouTubeBookmarker.init();
       inputContainer.appendChild(noteInput);
       this.state.bookmarkInputContainer = inputContainer;
 
-      console.log("après l'ajout du conteneur d'input");
-      console.log(this.state.bookmarkInputContainer);
-
       const { showBookmarkButtons } = await new Promise(resolve =>
-        chrome.storage.sync.get({ showBookmarkButtons: false }, resolve)
+        chrome.storage.local.get({ showBookmarkButtons: false }, resolve)
       );
 
       if (showBookmarkButtons) {
@@ -280,13 +295,13 @@ YouTubeBookmarker.init();
           }
         }
         console.log("click, fermeture du conteneur d'input");
-        console.log(this.state.bookmarkInputContainer);
       };
 
       inputContainer.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
       });
+
       noteInput.addEventListener('keydown', e => {
         e.stopPropagation();
         if (e.key === 'Escape') {
@@ -303,72 +318,61 @@ YouTubeBookmarker.init();
   },
 
   async saveBookmark(note) {
-    const bookmark = {
+    const newBookmark = {
       time: this.currentVideoTime,
       url: this.currentUrl,
       note: note
     };
 
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'addBookmark', bookmark });
-      if (response.success) {
+      if (!this.state.bookmarks.some(b => b.url === newBookmark.url && b.time === newBookmark.time)) {
+        this.state.bookmarks.push(newBookmark);
+        await chrome.storage.local.set({ bookmarks: this.state.bookmarks });
         this.affMessage("Marque-page ajouté avec succès !", 'info');
+        
+        const storedBookmarks = await chrome.storage.local.get('bookmarks');
+        console.log("saveBookmark this.state.bookmarks:", JSON.stringify(this.state.bookmarks));
+        console.log("bookmarks enregistrés dans le local storage de chrome", JSON.stringify(storedBookmarks.bookmarks));
+        
         this.loadBookmarks();
-      } else {
-        this.affMessage(`Erreur lors de l'ajout du marque-page : ${response.error}`, 'error');
       }
     } catch (error) {
-      this.affMessage(`Erreur de communication avec l'extension : ${error}`, 'error');
+      console.error("Erreur lors de l'ajout du marque-page:", error);
     }
   },
-  
+
   closeBookmarkInput() {
-    console.log("avant la Fermeture du conteneur d'input");
-    console.log(this.state.bookmarkInputContainer);
     if (this.state.bookmarkInputContainer) {
       this.state.bookmarkInputContainer.remove();
       this.state.bookmarkInputContainer = null;
       this.state.bookmarkInputElement = null;
       this.state.bookmarkContainerVisible = false;
-      console.log("Fermeture du conteneur d'input");
-      console.log(this.state.bookmarkInputContainer);
-      console.log(JSON.stringify(this.state.bookmarkInputContainer));
     } else {
-      console.warn("bookmarkInputContainer est déjà null, impossible de le supprimer.");
-      console.log(this.state.bookmarkInputContainer);
-      console.log(JSON.stringify(this.state.bookmarkInputContainer));
     }
     if (this.state.bookmarkInputElement) {
       this.state.bookmarkInputElement = null;
       this.state.bookmarkContainerVisible = false;
-      console.log("bookmarkContainerVisible mis à false");
     }
     this.state.wasPlayingBeforeBookmark ? this.state.currentVideo.play() : null;
     return;
   },
 
   async loadBookmarks() {
-    try {
-      const response = await chrome.runtime.sendMessage({ action: 'getBookmarks', url: this.currentUrl });
-      if (response.bookmarks) {
-        this.displayBookmarks(response.bookmarks);
-        console.log("après le displayBookmarkks");
-        console.log(response.bookmarks);
-      } else {
-        console.error("Erreur lors du chargement des marque-pages:", response.error);
-      }
-    } catch (error) {
-      console.error("Erreur de communication avec l'extension:", error);
+    console.log("loadBookmarks this.state.bookmarks:", this.state.bookmarks);
+    console.log("loadBookmarks this.state.groupedBookmarks:", this.state.groupedBookmarks);
+    if (this.state.bookmarks.length === 0) {
+      console.log("loadBookmarks Aucun marque-page trouvé pour cette url");
+      return;
     }
-  },
-
-  displayBookmarks(bookmarks) {
-    this.removeExistingBookmarkIcons();
-    bookmarks.forEach(bookmark => this.addBookmarkIcon(bookmark));
-  },
-
-  removeExistingBookmarkIcons() {
-    document.querySelectorAll(`.${this.CONSTANTS.BOOKMARK_ICON_CONTAINER_CLASS}`).forEach(el => el.remove());
+    else {
+      document.querySelectorAll(`.${this.CONSTANTS.BOOKMARK_ICON_CONTAINER_CLASS}`).forEach(el => el.remove());
+      try {
+        const bookmarksForThisUrl = this.state.bookmarks.filter(bookmark => bookmark.url === this.currentUrl);
+        bookmarksForThisUrl.forEach(bookmark => this.addBookmarkIcon(bookmark));
+      } catch (error) {
+        console.error("loadBookmarks Erreur du chargement des marque-pages pour cette url:", error);
+      }
+    }
   },
 
   addBookmarkIcon(bookmark) {
@@ -411,7 +415,7 @@ YouTubeBookmarker.init();
     });
 
     icon.addEventListener('mouseleave', () => {
-      chrome.storage.sync.get('hideNotesByDefault', ({ hideNotesByDefault }) => {
+      chrome.storage.local.get('hideNotesByDefault', ({ hideNotesByDefault }) => {
         if (hideNotesByDefault) {
           infoContainer.style.display = 'none';
         }
@@ -423,7 +427,7 @@ YouTubeBookmarker.init();
     });
 
     infoContainer.addEventListener('mouseleave', () => {
-      chrome.storage.sync.get('hideNotesByDefault', ({ hideNotesByDefault }) => {
+      chrome.storage.local.get('hideNotesByDefault', ({ hideNotesByDefault }) => {
         if (hideNotesByDefault) {
           infoContainer.style.display = 'none';
         }
@@ -506,20 +510,26 @@ YouTubeBookmarker.init();
   },
 
   async navigateBookmarks(direction) {
+    const allBookmarks = [];
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'getBookmarks', url: window.location.href });
-      if (response.bookmarks) {
-        const allBookmarks = [...this.defaultBookmarks, ...response.bookmarks].sort((a, b) => a.time - b.time);
-    
-        if (direction === 'prev') {
-          const prevBookmark = allBookmarks.reverse().find(b => b.time < this.currentVideoTime);
-          if (prevBookmark) this.currentVideoTime = prevBookmark.time;
-          console.log(`Navigué vers le signet précédent : ${prevBookmark.note}`);
-        } else if (direction === 'next') {
-          const nextBookmark = allBookmarks.find(b => b.time > this.currentVideoTime);
-          if (nextBookmark) this.currentVideoTime = nextBookmark.time;
-          console.log(`Navigué vers le signet suivant : ${nextBookmark.note}`);
+      this.defaultBookmarks = this.defaultBookmarks || [];
+      if (this.state.bookmarks.length === 0) {
+        this.defaultBookmarks = [
+          { time: 0, note: 'Début de la vidéo' },
+          { time: this.currentVideoTime, note: 'Fin de la vidéo' }
+          ];
+          console.log("Marque-pages par défaut ajoutés :", this.defaultBookmarks);
+          allBookmarks = this.state.bookmarks.push(...this.defaultBookmarks);
         }
+      else {
+        allBookmarks = [...this.defaultBookmarks, ...this.state.bookmarks].sort((a, b) => a.time - b.time);
+      }
+      if (direction === 'prev') {
+        const prevBookmark = allBookmarks.filter(b => b.time < this.currentVideoTime - 3).pop();
+        if (prevBookmark) this.currentVideoTime = prevBookmark.time;
+      } else if (direction === 'next') {
+        const nextBookmark = allBookmarks.filter(b => b.time > this.currentVideoTime).shift();
+        if (nextBookmark) this.currentVideoTime = nextBookmark.time;
       }
     } catch (error) {
       console.error("Erreur lors de la navigation vers les marque-pages :", error);
@@ -541,4 +551,23 @@ if (port.name === "contentScript") {
 if (!chrome.runtime) {
 console.error("L'API chrome.runtime n'est pas disponible. Vérifiez la compatibilité du navigateur.");
 }
+
+/* 
+
+
+async checkelement() {
+  if (document.querySelector('video')) {
+    console.log("video trouvé");
+    const video = document.querySelector('video');
+    console.log(video); // Vérifiez l'élément
+    video.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation(); 
+    }, true); 
+  }
+}
+ */
+
+
 

@@ -1,6 +1,3 @@
-import { exportBookmarksAsMarkdown, exportBookmarksAsJSON, importBookmarks } from './export.js';
-import { BMBackground } from './background.js';
-
 const BMOptions = {
     elements: {},
 
@@ -27,7 +24,7 @@ const BMOptions = {
 
     async loadOptions() {
         return new Promise((resolve) => {
-            chrome.storage.sync.get(['hotkeys', 'hideNotesByDefault', 'showBookmarkButtons'], (result) => {
+            chrome.storage.local.get(['hotkeys', 'hideNotesByDefault', 'showBookmarkButtons'], (result) => {
                 if (result.hotkeys) {
                     Object.entries(result.hotkeys).forEach(([key, value]) => {
                         document.getElementById(key).value = value;
@@ -40,34 +37,45 @@ const BMOptions = {
         });
     },
 
+    afficherMessage(message, type = 'info') {
+        const messageContainer = document.createElement('div');
+        messageContainer.className = `youtube-bookmarker-message ${type}`;
+        messageContainer.textContent = message;
+        document.body.appendChild(messageContainer);
+    
+        setTimeout(() => {
+            messageContainer.remove();
+        }, 3000);
+    },
+
     setupEventListeners() {
         this.elements.hotkeyInputs.forEach(input => {
             input.addEventListener('keydown', this.handleHotkeyInput.bind(this));
         });
 
         this.elements.hideNotesCheckbox.addEventListener('change', (e) => {
-            chrome.storage.sync.set({ hideNotesByDefault: e.target.checked }, () => {
+            chrome.storage.local.set({ hideNotesByDefault: e.target.checked }, () => {
                 console.log('Données enregistrées avec succès !');
             });
-            BMBackground.afficherMessage('Option enregistrée !');
+            this.afficherMessage('Option enregistrée !');
         });
 
         this.elements.showBookmarkButtonsCheckbox.addEventListener('change', (e) => {
-            chrome.storage.sync.set({ showBookmarkButtons: e.target.checked }, () => {
+            chrome.storage.local.set({ showBookmarkButtons: e.target.checked }, () => {
                 console.log('Données enregistrées avec succès !');
             });
-            BMBackground.afficherMessage('Option enregistrée !');
+            this.afficherMessage('Option enregistrée !');
         });
 
         // Exporter les marque-pages
         this.elements.exportMarkdownBtn.addEventListener('click', () => {
-            chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+            chrome.storage.local.get('bookmarks', ({ bookmarks }) => {
                 exportBookmarksAsMarkdown(bookmarks);
             });
         });
 
         this.elements.exportJSONBtn.addEventListener('click', () => {
-            chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+            chrome.storage.local.get('bookmarks', ({ bookmarks }) => {
                 exportBookmarksAsJSON(bookmarks);
             });
         });
@@ -101,46 +109,46 @@ const BMOptions = {
             Array.from(document.querySelectorAll('input[type="text"]'))
                 .map(input => [input.id, input.value])
         );
-        chrome.storage.sync.set({ hotkeys });
-        BMBackground.afficherMessage('Raccourci enregistré !');
+        chrome.storage.local.set({ hotkeys });
+        this.afficherMessage('Raccourci enregistré !');
     },
 
     handleHideNotesChange(e) {
-        chrome.storage.sync.set({ hideNotesByDefault: e.target.checked }, () => {
+        chrome.storage.local.set({ hideNotesByDefault: e.target.checked }, () => {
             console.log('Données enregistrées avec succès !');
         });
-        BMBackground.afficherMessage('Option enregistrée !');
+        this.afficherMessage('Option enregistrée !');
     },
 
     handleShowBookmarkButtonsChange(e) {
-        chrome.storage.sync.set({ showBookmarkButtons: e.target.checked }, () => {
+        chrome.storage.local.set({ showBookmarkButtons: e.target.checked }, () => {
             console.log('Données enregistrées avec succès !');
         });
-        BMBackground.afficherMessage('Option enregistrée !');
+        this.afficherMessage('Option enregistrée !');
     },
     
     handleExportMarkdown() {
-        chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+        chrome.storage.local.get('bookmarks', ({ bookmarks }) => {
             exportBookmarksAsMarkdown(bookmarks);
-            BMBackground.afficherMessage('Markdown exporté !');
+            this.afficherMessage('Markdown exporté !');
         });
     },
     
     handleExportJSON() {
-        chrome.storage.sync.get('bookmarks', ({ bookmarks }) => {
+        chrome.storage.local.get('bookmarks', ({ bookmarks }) => {
             exportBookmarksAsJSON(bookmarks);
-            BMBackground.afficherMessage('JSON exporté !');
+            this.afficherMessage('JSON exporté !');
         });
     },
 
     handleImport(fileInput) {
         const file = fileInput.files[0];
         if (!file) {
-            alert('Veuillez sélectionner un fichier à importer.');
+            this.afficherMessage('Veuillez sélectionner un fichier à importer.', 'warning');
             return;
         }
         importBookmarks(file);
-        BMBackground.afficherMessage('Importation terminée !');
+        this.afficherMessage('Importation terminée !');
     }
 };
 
