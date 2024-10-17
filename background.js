@@ -2,10 +2,9 @@
 chrome.runtime.onInstalled.addListener(async () => {
   try {
     console.log("BMBackground : Extension installée");
-    await clearLocalStorage();
-    await BMBackground.initializeBookmarks();
-    console.log("BMBackground.state.bookmarks", BMBackground.state.bookmarks);
-    console.log("BMBackground.state.groupedBookmarks", BMBackground.state.groupedBookmarks);
+    await BMBackground.init();
+    console.log("BMBackground init() this.state.bookmarks", BMBackground.state.bookmarks);
+    console.log("BMBackground init() this.state.groupedBookmarks", BMBackground.state.groupedBookmarks);
   } catch (error) {
     console.error("BMBackground Erreur lors de l'initialisation :", error);
   }
@@ -30,18 +29,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
     case 'getGroupedBookmarks':
       console.log("BMBackground Message reçu : getGroupedBookmarks");
-      if (Object.keys(BMBackground.state.groupedBookmarks).length > 0) {
-        console.log("BMBackground Envoi des groupedBookmarks en cache");
-        sendResponse({ groupedBookmarks: BMBackground.state.groupedBookmarks });
-      } else {
-        BMBackground.getGroupedBookmarks().then(groupedBookmarks => {
-          console.log("BMBackground Sending grouped bookmarks:", groupedBookmarks);
-          sendResponse({ groupedBookmarks });
+      BMBackground.getGroupedBookmarks().then(groupedBookmarks => {
+        console.log("BMBackground Sending grouped bookmarks:", groupedBookmarks);
+        sendResponse({ groupedBookmarks });
         }).catch(error => {
           console.error("BMBackground Erreur lors de la récupération des groupes de marque-pages:", error);
           sendResponse({ error: error.message });
         });
-      }
       return true;
     case 'getVideoTitle':
       BMBackground.getVideoTitle(request.url).then(sendResponse);
@@ -63,19 +57,24 @@ const BMBackground = {
     bookmarks: []
   },
   
-  async initializeBookmarks() {
+  async init() {
     console.log("BMBackground : initialisation des bookmarks");
     try {
       const resultBookmarks = await chrome.storage.local.get('bookmarks');
       this.state.bookmarks = resultBookmarks.bookmarks || [];
       
+      if (resultBookmarks.bookmarks === undefined) {
+        console.log("BMBackground : bookmarks non trouvés, création d'un tableau vide");
+        chrome.storage.local.set({ bookmarks: [] });
+      }
+
       const resultGrouped = await chrome.storage.local.get('groupedBookmarks');
       this.state.groupedBookmarks = resultGrouped.groupedBookmarks || {};
       
-      console.log("BMBackground storedBookmarks", resultBookmarks);
-      console.log("BMBackground storedGroupedBookmarks", resultGrouped);
+      console.log("BMBackground init() storedBookmarks", resultBookmarks);
+      console.log("BMBackground init() storedGroupedBookmarks", resultGrouped);
     } catch (error) {
-      console.error("BMBackground Erreur lors de l'initialisation des marque-pages:", error);
+      console.error("BMBackground init() error:", error);
     }
   },
 
@@ -125,24 +124,48 @@ const BMBackground = {
   },
 
   async getGroupedBookmarks() {
-    console.log("getGroupedBookmarks appelé");
-    if (Object.keys(this.state.groupedBookmarks).length > 0) {
-      console.log("Retour des groupedBookmarks en cache");
-      return this.state.groupedBookmarks;
-    }
+    console.log("BMBackground getGroupedBookmarks appelé");
     try {
-      console.log("Bookmarks en mémoire:", this.state.bookmarks);
-      const groupedBookmarks = await this.groupBookmarksByUrl(this.state.bookmarks);
-
-      for (const url in groupedBookmarks) {
-        const group = groupedBookmarks[url];
-        group.title = (await this.getVideoTitle(url)).title;
-        group.thumbnailUrl = await this.getThumbnailUrl(url);
+      const result = await chrome.storage.local.get('bookmarks');
+      const bookmarks = result.bookmarks;
+      console.log("BMBackground storage de bookmarks", bookmarks);
+      console.log("BMBackground this.state.bookmarks", this.state.bookmarks);
+      
+      // Si aucun bookmark n'est trouvé dans le storage ou que bookmarks est undefined, renvoyer un objet vide
+      if (!bookmarks || bookmarks.length === 0) {
+        console.log("Aucun bookmark trouvé ou bookmarks undefined, renvoi d'un objet vide");
+        this.state.groupedBookmarks = {};
+        return this.state.groupedBookmarks;
       }
-      this.state.groupedBookmarks = groupedBookmarks;
-      return groupedBookmarks;
+      
+      // Si les bookmarks sont identiques et que groupedBookmarks existe, renvoyer groupedBookmarks
+      if (this.state.bookmarks.length === bookmarks.length && Object.keys(this.state.groupedBookmarks).length > 0) {
+        console.log("BMBackground Retour des groupedBookmarks en cache");
+        return this.state.groupedBookmarks;
+      }
+
+      // Si le nombre de bookmarks a changé, regrouper les bookmarks
+      else if (this.state.bookmarks.some(bookmark => !bookmarks.includes(bookmark) || bookmarks.length<1)) {
+        console.log("Le nombre de bookmarks a changé, regroupement nécessaire");
+        this.state.bookmarks = bookmarks;
+
+        const groupedBookmarks = await this.groupBookmarksByUrl(bookmarks);
+        
+        for (const url in groupedBookmarks) {
+          const group = groupedBookmarks[url];
+          group.title = (await this.getVideoTitle(url)).title;
+          group.thumbnailUrl = await this.getThumbnailUrl(url);
+        }
+
+        this.state.groupedBookmarks = groupedBookmarks;
+        
+        await chrome.storage.local.set({ groupedBookmarks: groupedBookmarks });
+        console.log("BMBackground groupedBookmarks", groupedBookmarks);
+        
+        return groupedBookmarks;
+      }
     } catch (error) {
-      console.error("Erreur lors de la récupération des groupes de marque-pages:", error);
+      console.error("BMBackground Erreur lors de la récupération des groupes de marque-pages:", error);
       throw error;
     }
   },

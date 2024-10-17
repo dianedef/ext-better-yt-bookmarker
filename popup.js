@@ -1,10 +1,10 @@
-// Écouteur d'événements pour les messages envoyés à l'extension
+/* // Écouteur d'événements pour les messages envoyés à l'extension
 chrome.runtime.onMessage.addListener((request) => {
   if (request.action === "closePopup") {
     BMPopup.resetState();
   }
   return true;
-});
+}); */
 
 const BMPopup = {
   state: {
@@ -22,28 +22,13 @@ const BMPopup = {
     console.log("init this.state.groupedBookmarks", this.state.groupedBookmarks)
     console.log("init this.state.bookmarks", this.state.bookmarks)
     try {
-      try {
-        await this.getGroupedBookmarks();
-        console.log("groupedBookmarks:", this.state.groupedBookmarks);
-      } catch (error) {
-        console.error(
-          "Erreur lors de l'initialisation des marque-pages:",
-          error
-        );
-      }
-      try {
-        this.loadBookmarksIntoHTML();
-      } catch (error) {
-        console.error(
-          "Erreur lors du chargement des bookmarks dans le HTML:",
-          error
-        );
-      }
+      await this.getGroupedBookmarks();
+      console.log("BMPopup init getGroupedBookmarks:", this.state.groupedBookmarks);
+      this.loadBookmarksIntoHTML();
     } catch (error) {
-      console.error("Erreur lors de l'initialisation:", error);
+      console.error("BMPopup init error:", error);
     }
     this.createBottomBar();
-    this.resetState();
   },
 
   async resetState() {
@@ -63,33 +48,28 @@ const BMPopup = {
   },
 
   async getGroupedBookmarks() {
-    if (Object.keys(this.state.groupedBookmarks).length) {
-        console.log("Utilisation des groupedBookmarks du cache:", this.state.groupedBookmarks);
-        return this.state.groupedBookmarks;
-    }
-    
-    try {
-        const response = await new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage({ action: "getGroupedBookmarks" }, (response) => {
-                if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
-                } else {
-                    resolve(response);
-                }
-            });
-        });
-        
-        if (response && response.groupedBookmarks) {
-            this.state.groupedBookmarks = response.groupedBookmarks;
-            console.log("Récupération des groupedBookmarks du background:", this.state.groupedBookmarks);
-            await chrome.storage.local.set({ groupedBookmarks: this.state.groupedBookmarks });
-            return this.state.groupedBookmarks;
+    const response = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ action: "getGroupedBookmarks" }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
         } else {
-            throw new Error("Réponse invalide du background script", response);
+          resolve(response);
         }
-    } catch (error) {
-        console.error("Erreur lors de la récupération des groupedBookmarks:", error);
-        throw error;
+      });
+    });
+
+    if (response && response.groupedBookmarks) {
+      this.state.groupedBookmarks = response.groupedBookmarks;
+      console.log(
+        "Récupération des groupedBookmarks du background:",
+        this.state.groupedBookmarks
+      );
+      return this.state.groupedBookmarks;
+    } else {
+      throw new Error(
+        "Réponse invalide du background script lors de la récupération des groupedBookmarks",
+        response
+      );
     }
   },
 
